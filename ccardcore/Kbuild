@@ -1,0 +1,11 @@
+# used to build the kernel module
+# guided by: http://www.tldp.org/LDP/lkmpg/2.6/html/x181.html
+
+obj-m := ccardmodule.o
+ccardmodule-y := i2cctl.o magnetorquer.o dsa.c
+
+
+
+
+
+

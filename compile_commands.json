@@ -1,0 +1,42 @@
+[
+{
+  "directory": "/home/mark/documents/drone/build",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc   --std=gnu99  -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/rocketTest.dir/flight/FlightTest.c.o   -c /home/mark/documents/drone/flight/FlightTest.c",
+  "file": "/home/mark/documents/drone/flight/FlightTest.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Davionics_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/avionics.dir/i2cctl.c.o   -c /home/mark/documents/drone/flight/i2cctl.c",
+  "file": "/home/mark/documents/drone/flight/i2cctl.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Davionics_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/avionics.dir/SensorManager.c.o   -c /home/mark/documents/drone/flight/SensorManager.c",
+  "file": "/home/mark/documents/drone/flight/SensorManager.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Davionics_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/avionics.dir/PWMController.c.o   -c /home/mark/documents/drone/flight/PWMController.c",
+  "file": "/home/mark/documents/drone/flight/PWMController.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Dcomputation_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/computation.dir/Vector.c.o   -c /home/mark/documents/drone/flight/Vector.c",
+  "file": "/home/mark/documents/drone/flight/Vector.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Dnavigation_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/navigation.dir/MotorControllerLowLevel.c.o   -c /home/mark/documents/drone/flight/MotorControllerLowLevel.c",
+  "file": "/home/mark/documents/drone/flight/MotorControllerLowLevel.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Dnavigation_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/navigation.dir/MotorControllerHighLevel.c.o   -c /home/mark/documents/drone/flight/MotorControllerHighLevel.c",
+  "file": "/home/mark/documents/drone/flight/MotorControllerHighLevel.c"
+},
+{
+  "directory": "/home/mark/documents/drone/build/flight",
+  "command": "/home/mark/documents/drone/build/toolchain/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc  -Dnavigation_EXPORTS --std=gnu99  -fPIC -I/home/mark/documents/drone -I/home/mark/documents/drone/flight    -o CMakeFiles/navigation.dir/Orientation.c.o   -c /home/mark/documents/drone/flight/Orientation.c",
+  "file": "/home/mark/documents/drone/flight/Orientation.c"
+}
+]
