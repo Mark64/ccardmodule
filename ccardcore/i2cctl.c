@@ -9,27 +9,17 @@
 //
 // by Mark Hill
 
-#include<unistd.h>
+#include<linux/types.h>
 #include<linux/i2c.h>
-#include<linux/i2c-dev.h>
-#include<sys/ioctl.h>
-#include<fcntl.h>
-#include<stdio.h>
-#include<pthread.h>
+#include<linux/kernel.h>
+#include<linux/semaphore.h>
 
 #include "i2cctl.h"
 
 
-#ifdef RELEASE
-static const int debug = 0;
-#else
-static const int debug = 1;
-#endif
-
-
 // sorry for the global. Forgive me for I know not what I do
 // defaults to 1 because lets face it, thats normal
-static uint8_t _bus = 1;
+static u8 _bus = 1;
 static int _i2cFile = -1000;
 
 // this mutex is used to protect the i2c device from being used to do a read or write operations
@@ -38,46 +28,42 @@ static int _i2cFile = -1000;
 //   could potentially interfere with and corrupt other concurrent operations
 // the other _mutex_created variable allows the mutex to be initialized without a discrete initialize function
 // 1 = created, 0 = not created
-static pthread_mutex_t _lock;
-static int _mutex_created = 0;
+static struct semaphore _i2c_lock;
+static s8 _mutex_created = 0;
 
 // this is a wait function and returns once the lock is removed to allow the i2c function to access the device
-static void getLock() {
+static int getLock(void) {
 	if (!_mutex_created) {
-		pthread_mutex_init(&_lock, NULL);
+		sema_init(&_i2c_lock, 1);
 		_mutex_created = 1;
 	}
-	pthread_mutex_lock(&_lock);
+	return down_interruptible(&_i2c_lock);
 }
 
 // this frees the lock to allow another function to use the i2c device
-static void releaseLock() {
-	if (_mutex_created) {
-		pthread_mutex_unlock(&_lock);
-	}
+static void releaseLock(void) {
+	if (_mutex_created)
+		up(&_i2c_lock);
 }
 
 
 // initializes the _i2cFile variable which makes the i2c bus avaliable for reading and writing
 // no need for this to be run outside this file, so its private.  User access can be provided by
-//   running the i2cSetBus function, which will call this function
+//   running the i2c_set_bus function, which will call this function
 // returns the i2c file descriptor
-int i2cInit() {
+int i2c_init(void) {
 	// this disrupts access to the i2c device, so obviously it sole access via the lock
 	getLock();
 
 	if (_i2cFile < 0) {
-		char i2cBusName[12];
-		sprintf(i2cBusName, "/dev/i2c-%d", _bus);
+		u8 i2cBusName[12];
+		snprintf(i2cBusName, 12, "/dev/i2c-%d", _bus);
 
 		_i2cFile = open(i2cBusName, O_RDWR);
 		
 		// this means an error has occured
-		if (_i2cFile < 0) {
-			if (debug == 1) {
-				printf("Error opening i2c file: %d\nIn function i2cInit in i2cctl.cpp\n", _i2cFile);
-			}
-		}
+		if (_i2cFile < 0)
+			printk(KERN_ERR "Error opening i2c file: %d\nIn function i2c_init in i2cctl.cpp\n", _i2cFile);
 	}
 
 	releaseLock();
@@ -88,7 +74,7 @@ int i2cInit() {
 
 
 // closes the i2c file
-void i2cClose() {
+void i2cClose(void) {
 	getLock();
 
 	// closes the i2c file
@@ -97,7 +83,6 @@ void i2cClose() {
 
 	// releases the lock for the now useless i2c file
 	releaseLock();
-	pthread_mutex_destroy(&_lock);
 	_mutex_created = 0;
 }
 
@@ -106,22 +91,20 @@ void i2cClose() {
 
 // sets the i2c device address and also configures the i2c device to take 10 bit or 8 bit addresses
 // returns 0 for success and something else for error
-static int i2cSetAddress(uint16_t address) {
+static int i2c_set_address(u16 address) {
 	// in case the bus was never set, this ensures the i2c device is always initialized
-	i2cInit();
+	i2c_init();
 	
 	// needs lock access because this will disrupt concurrent operations
 	getLock();
 
 	// set ten bit address mode
-	uint8_t isTenBit = (address - 127 > 0) ? 1 : 0;
+	u8 isTenBit = (address - 127 > 0) ? 1 : 0;
 	int set10Bit = ioctl(_i2cFile, I2C_TENBIT, isTenBit);
 	
 	// this means an error has occured
 	if (set10Bit < 0) {
-		if (debug == 1) {
-			printf("Failed to set 10 bit mode with error code %d in i2cctl.cpp\n", set10Bit);
-		}
+		printk(KERN_ERR "Failed to set 10 bit mode with error code %d in i2cctl.cpp\n", set10Bit);
 
 		releaseLock();
 		return set10Bit;
@@ -132,9 +115,7 @@ static int i2cSetAddress(uint16_t address) {
 	
 	// this means an error has occured
 	if (setSlave < 0) {
-		if (debug == 1) {
-			printf("Failed to set slave address to %x with error %d in i2cctl.cpp\n", address, setSlave);
-		}
+		printk(KERN_ERR "Failed to set slave address to %x with error %d in i2cctl.cpp\n", address, setSlave);
 
 		releaseLock();
 		return setSlave;
@@ -148,7 +129,7 @@ static int i2cSetAddress(uint16_t address) {
 
 
 // set the bus used for i2c communication
-int i2cSetBus(uint8_t bus) {
+int i2c_set_bus(u8 bus) {
 	// prevent orphaned files
 	i2cClose();
 
@@ -157,11 +138,11 @@ int i2cSetBus(uint8_t bus) {
 
 	_bus = bus;
 
-	// finished with the lock before most functions, and i2cInit needs the lock, so it gets released
+	// finished with the lock before most functions, and i2c_init needs the lock, so it gets released
 	releaseLock();
 	
 	// reinitialize the i2c when the desired bus changes
-	i2cInit();
+	i2c_init();
 
 	// idc that this is unnecessary, I made it bool so itll return bool because I like bool
 	return (_bus == bus && _i2cFile >= 0) ? 0 : -1;
@@ -171,12 +152,10 @@ int i2cSetBus(uint8_t bus) {
 
 
 // single or multiple byte read
-uint32_t i2cRead(uint16_t address, uint8_t reg[], uint8_t numRegisters) {
+u32 i2cRead(u16 address, u8 reg[], u8 num_reg) {
 	// set address of i2c device and then check if it failed
-	if (i2cSetAddress(address) != 0) {
-		if (debug == 1) {
-			printf("Failed to set device address %x in i2cctl.cpp\n", address); 
-		}
+	if (i2c_set_address(address) != 0) {
+		printk(KERN_ERR "Failed to set device address %x in i2cctl.cpp\n", address); 
 		return 0;
 	}
 	
@@ -184,35 +163,31 @@ uint32_t i2cRead(uint16_t address, uint8_t reg[], uint8_t numRegisters) {
 	//   to the correct position in the 'result' integer
 	// also needs the lock during this loop
 	getLock();
-	uint32_t result = 0;
-	for (int regIndex = 0; regIndex < numRegisters; regIndex++) {
+	u32 result = 0;
+	for (int regIndex = 0; regIndex < num_reg; regIndex++) {
 		// sets the curReg temporary variable
-		uint8_t curReg = reg[regIndex];
+		u8 curReg = reg[regIndex];
 
 		// write the address of the register to be read (the first step in the i2c operation is actually to 
 		//   write to the slave the value of the i2c register you want to read from) and then check if it failed
 		if (write(_i2cFile, &curReg, 1) < 0) {
-			if (debug == 1) {
-				printf("Failed to set device register %x at address %x in i2cctl.cpp\n", curReg, address);
-			}
+			printk(KERN_ERR "Failed to set device register %x at address %x in i2cctl.cpp\n", curReg, address);
 
 			releaseLock();
 			return 0;
 		}
 	
 		// if you got this far, its time to actually perform a read and then, as you can guess, check if it failed
-		uint32_t data = 0;
+		u32 data = 0;
 		if (read(_i2cFile, &data, 1) < 0) {
-			if (debug == 1) {
-				printf("Failed to read from register %x at address %x in i2cctl.cpp\n", curReg, address);
-			}
+			printk(KERN_ERR "Failed to read from register %x at address %x in i2cctl.cpp\n", curReg, address);
 
 			releaseLock();
 			return 0;
 		}
 
 		// offset the bits in the data variable so that it can be addedd to 'result'
-		int offsets = numRegisters - (regIndex + 1);
+		s8 offsets = num_reg - (regIndex + 1);
 		data <<= offsets * 8;
 		
 		result += data;
@@ -225,12 +200,10 @@ uint32_t i2cRead(uint16_t address, uint8_t reg[], uint8_t numRegisters) {
 // Slightly more efficient but highly specific version of i2cRead for dealing 
 //   with sampling from the accelerometer and gyro or any other device with
 //   multibyte words split across multiple registers
-int i2cWordRead(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t *readResults, uint8_t bytesPerValue, uint8_t highByteFirst, uint8_t autoIncrementEnabled) {
+int i2c_read(u16 address, u8 reg[], u8 num_reg, u32 *readResults, u8 bytes_per_value, u8 high_byte_first, u8 auto_increment_enabled) {
 	// set address of i2c device and then check if it failed
-	if (i2cSetAddress(address) != 0) {
-		if (debug == 1) {
-			printf("Failed to set device address %x in i2cctl.cpp\n", address); 
-		}
+	if (i2c_set_address(address) != 0) {
+		printk(KERN_ERR "Failed to set device address %x in i2cctl.cpp\n", address); 
 		return -1;
 	}
 	
@@ -239,40 +212,37 @@ int i2cWordRead(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t 
 	getLock();
 	
 	// outer loop deals with the whole word being read
-	// it loops 'numRegisters/bytesPerValue' times, so reads bytesPerValue bytes per output value
+	// it loops 'num_reg/bytes_per_value' times, so reads bytes_per_value bytes per output value
 	// result is placed into the index of 'readResults' that corresponds to the 'readIndex' variable
-	for (int readIndex = 0; readIndex < numRegisters/bytesPerValue; readIndex++) {
+	for (int readIndex = 0; readIndex < num_reg/bytes_per_value; readIndex++) {
 		
 		// this variable will store the result of the read opration
-		uint32_t result = 0;
+		u32 result = 0;
 
-		// now loop through twice to read from the 'bytesPerValue' number of registers that make up the 
+		// now loop through twice to read from the 'bytes_per_value' number of registers that make up the 
 		//   value to be placed into the variable 'result' above
-		for (int regIndex = 0; regIndex < bytesPerValue; regIndex++) {
+		for (int regIndex = 0; regIndex < bytes_per_value; regIndex++) {
 			
 			// sets the curReg temporary variable based on the current readIndex and regIndex
-			uint8_t curReg = reg[regIndex + (bytesPerValue*readIndex)];
+			u8 curReg = reg[regIndex + (bytes_per_value*readIndex)];
 	
 			// if you got this far, its time to actually perform a read and then, as you can guess, check if it failed
 			// in this version of i2cRead, we actually want to sample multiple times prior to determining and
 			//   returning a value
-			uint32_t readResult = 0;
+			u32 readResult = 0;
 				
 			// write the address of the register to be read (the first step in the i2c operation is actually to 
 			//   write to the slave the value of the i2c register you want to read from) 
 			//   only if autoIncrement is not enabled or this is the first register to be read
 			int writeSuccess = 0;
-			if (regIndex == 0 || autoIncrementEnabled == 0) {
+			if (regIndex == 0 || auto_increment_enabled == 0)
 				 writeSuccess = write(_i2cFile, &curReg, 1);
-			}
 			
 			// if the write failed, print out the error
 			if (writeSuccess < 0) {
-				if (debug == 1) {
-					printf("Failed to set device register %x at address %x in i2cctl.cpp\n", curReg, address);
-				}
-				if (autoIncrementEnabled == 1) {
-					printf("Read with autoIncrementEnabled flag set to 1 failed, so read exited prematurely");
+				printk(KERN_ERR "Failed to set device register %x at address %x in i2cctl.cpp\n", curReg, address);
+				if (auto_increment_enabled == 1) {
+					printk(KERN_ERR "Read with auto_increment_enabled flag set to 1 failed, so read exited prematurely");
 					releaseLock();
 					return -1;
 				}
@@ -280,24 +250,17 @@ int i2cWordRead(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t 
 			// this means register address setting was successful
 			// this is where the data is actually read and the success is checked
 			else {
-				uint8_t numBytes = autoIncrementEnabled == 1 ? bytesPerValue : 1;
-				uint8_t readArray[numBytes];
+				u8 numBytes = auto_increment_enabled == 1 ? bytes_per_value : 1;
+				u8 readArray[numBytes];
 				// array stores the data, but readData is the actual values correct for MSB or LSB first
-				uint32_t readData = 0;
-				if (read(_i2cFile, readArray, numBytes) < 0) {
-					if (debug == 1) {
-						printf("Failed to read from register %x at address %x in i2cctl.cpp\n", curReg, address);
-					}
-	
-					printf("failed to read sample from register %x\n", curReg);
-				}
-			
+				u32 readData = 0;
+				if (read(_i2cFile, readArray, numBytes) < 0) 
 				// if the read was actually successful, correct the bit order (MSB first means the bytes
 				//   are currently out of order), then add the result
 				else {
-					for (int i = 0; i < bytesPerValue; i++) {
-						uint32_t temp = readArray[i];
-						uint8_t numShifts = (highByteFirst == HIGH_BYTE_FIRST) ? (8 * (bytesPerValue - i - 1)) : (8 * i);
+					for (int i = 0; i < bytes_per_value; i++) {
+						u32 temp = readArray[i];
+						u8 numShifts = (high_byte_first == HIGH_BYTE_FIRST) ? (8 * (bytes_per_value - i - 1)) : (8 * i);
 						readData += (temp << numShifts);
 					}
 
@@ -306,14 +269,14 @@ int i2cWordRead(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t 
 			}
 			
 			// if auto increment is enabled, no shifting or subsequent reads are needed
-			if (autoIncrementEnabled == 1) {
+			if (auto_increment_enabled == 1) {
 				result += readResult;
 				break;
 			}
 			else {
 				// offset the bits in the data variable so that it can be addedd to 'result'
-				// switches the offset order (0, 1, 2 vs 2, 1, 0 for example) depending on the highByteFirst flag
-				int offsets = highByteFirst == HIGH_BYTE_FIRST ? bytesPerValue - regIndex - 1 : regIndex;
+				// switches the offset order (0, 1, 2 vs 2, 1, 0 for example) depending on the high_byte_first flag
+				int offsets = high_byte_first == HIGH_BYTE_FIRST ? bytes_per_value - regIndex - 1 : regIndex;
 				readResult <<= offsets * 8;
 			
 				result += readResult;
@@ -332,12 +295,10 @@ int i2cWordRead(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t 
 
 
 // single or multiple byte write
-int i2cWrite(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t value, uint8_t highByteFirst, uint8_t autoIncrementEnabled) {	
+int i2c_write(u16 address, u8 reg[], u8 num_reg, u32 value, u8 high_byte_first, u8 auto_increment_enabled) {	
 	// set address of i2c device and then check if it failed
-	if (i2cSetAddress(address) != 0) {
-		if (debug == 1) {
-			printf("Failed to set device address %x in i2cctl.cpp\n", address); 
-		}
+	if (i2c_set_address(address) != 0) {
+		printk(KERN_ERR "Failed to set device address %x in i2cctl.cpp\n", address); 
 		return -1;
 	}
 	
@@ -345,29 +306,27 @@ int i2cWrite(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t val
 	getLock();
 
 	// flag that stores the success return value for the write function
-	uint8_t writeSuccess = 0;
+	u8 writeSuccess = 0;
 
 	// this mask removes all the unnecessary bits
-	uint32_t mask = 0x000000ff;
+	u32 mask = 0x000000ff;
 
 	// with autoincrement enabled, the entire write must be done in a single transaction
 	//   or else the register will be incremented before completion
-	if (autoIncrementEnabled == 1) {
-		uint8_t writeData[numRegisters + 1];
+	if (auto_increment_enabled == 1) {
+		u8 writeData[num_reg + 1];
 		writeData[0] = reg[0];
 			
 		// the 32 bit value must be split into single bytes
-		for (int i = 0; i < numRegisters; i++) {
-			int8_t offsets = highByteFirst == HIGH_BYTE_FIRST ? (numRegisters - i - 1) * 8 : (i * 8);
+		for (int i = 0; i < num_reg; i++) {
+			int8_t offsets = high_byte_first == HIGH_BYTE_FIRST ? (num_reg - i - 1) * 8 : (i * 8);
 			writeData[i+1] = (value >> offsets) & mask;
 		}
 
-		writeSuccess = write(_i2cFile, &writeData, numRegisters + 1);		
+		writeSuccess = write(_i2cFile, &writeData, num_reg + 1);		
 			
 		if (writeSuccess < 0) {
-			if (debug == 1) {
-				printf("Failed to write %x to device register %x at address %x in i2cctl.cpp\n", value, reg[0], address);
-			}
+			printk(KERN_ERR "Failed to write %x to device register %x at address %x in i2cctl.cpp\n", value, reg[0], address);
 	
 			releaseLock();
 			return -1;
@@ -378,27 +337,27 @@ int i2cWrite(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t val
 	}
 	// else
 	// loops through all the registers and sets them to the correct position in the 'result' integer
-	for (int regIndex = 0; regIndex < numRegisters; regIndex++) {
+	for (int regIndex = 0; regIndex < num_reg; regIndex++) {
 		// retrieves the byte to be written from within the value variable and puts it in a temporary variable
 		mask = 0x000000ff;
-		int8_t offsets = highByteFirst == HIGH_BYTE_FIRST ? (numRegisters - regIndex - 1) * 8 : (regIndex * 8);
-		uint8_t writeValue = (value >> offsets) & mask;
+		s8 offsets = high_byte_first == HIGH_BYTE_FIRST ? (num_reg - regIndex - 1) * 8 : (regIndex * 8);
+		u8 writeValue = (value >> offsets) & mask;
 		
-		//printf("writing value %x obtained from a mask of %x on the original value %x\n", writeValue, mask, value);
+		//printk(KERN_ERR "writing value %x obtained from a mask of %x on the original value %x\n", writeValue, mask, value);
 
 		// sets the curReg temporary variable
-		uint8_t curReg = reg[regIndex];
+		u8 curReg = reg[regIndex];
 
 		// write the address of the register to be written (the first step in the i2c operation is actually to 
 		//   write to the slave the value of the i2c register you want to write to), then write the byte from 
 		//   the variable 'writeValue', then check if the whole operation failed
-		uint8_t writeData[] = {curReg, writeValue};
+		u8 writeData[] = {curReg, writeValue};
 
 		writeSuccess = write(_i2cFile, writeData, 1);
 
 		// check for failure
 		if (writeSuccess < 0) {
-			printf("Failed to write %x to register %x at address %x in i2cctl.cpp\n", writeValue, curReg, address);
+			printk(KERN_ERR "Failed to write %x to register %x at address %x in i2cctl.cpp\n", writeValue, curReg, address);
 			releaseLock();
 			return -1;
 		}

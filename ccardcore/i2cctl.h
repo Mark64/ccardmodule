@@ -21,9 +21,6 @@
 #define LOW_BYTE_FIRST 0
 
 
-#include<stdint.h>
-
-
 // IMPORTANT: This supports 10 bit addresses if you pass an address larger than 128 into the address argument
 //   If your intention is not to access a 10 bit address, don't pass in a number > 128 or expect me to detect
 //   your error
@@ -35,16 +32,7 @@
 //   may be corrupted.  To reset the i2c device file, run this function, which will call the private 
 //   function in i2cctl.cpp to reinitialize the i2c file
 // returns 0 if successful (it will always be successful) and -1 on failure
-int i2cSetBus(uint8_t bus);
-
-// read from the registers in the reg[] array at i2c address 'address'
-// can read multiple bytes at once (for instance, when there is an H and L register for 12 and
-//   16 bit values) or just read one byte if only 1 register is provided
-// Similar to 'i2cget -t bus address register'
-// Returns the result of the read operation as a single integer containing the value with 
-//   the most significant bit as the first bit of the first register in the reg array
-// if 0, either there was an error or the value really is 0
-uint32_t i2cRead(uint16_t address, uint8_t reg[], uint8_t numRegisters);
+int i2c_set_bus(u8 bus);
 
 // Slightly more efficient but also more specific version of i2cRead for dealing
 //   with sampling from the accelerometer and gyro or any device with support for
@@ -55,28 +43,28 @@ uint32_t i2cRead(uint16_t address, uint8_t reg[], uint8_t numRegisters);
 //   and will contain return values for each group of 'bytesPerValue' registers
 // wordSize is the number of bytes per value
 //   use the macros defined at the top, or use integer values for number of bytes
-// highByteFirst is used to indicate whether the first register for each word contains
+// high_byte_first is used to indicate whether the first register for each word contains
 //   the high byte or the low byte
 //   use the macros HIGH_BYTE_FIRST and LOW_BYTE_FIRST
-// autoIncrementEnabled is a device specific flag that only applies if the device
+// auto_increment_enabled is a device specific flag that only applies if the device
 //   is configured to increment register number automatically after a read
 //   0 = disabled, 1 = enabled, but please use the macros instead of explicit values
 // returns -1 for failure and 0 for success 
-int i2cWordRead(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t *readResults, uint8_t wordSize, uint8_t highByteFirst, uint8_t autoIncrementEnabled);
+int i2c_read(u16 address, u8 reg[], u8 num_reg, u32 *read_results, u8 bytes_per_value, u8 high_byte_first, u8 auto_increment_enabled);
 
 // obviously a write is needed
 // similar to 'i2cset -y bus address register value'
 // writes the lower byte to the first register and the higher byte
 //   next, ending with the most significant byte
 // registers are written in order they appear in the array
-// highByteFirst is used to indicate whether the first register should be written
+// high_byte_first is used to indicate whether the first register should be written
 //   with the high byte or the low byte
 //   use the macros HIGH_BYTE_FIRST and LOW_BYTE_FIRST
-// autoIncrementEnabled is a device specific flag that only applies if the device
+// auto_increment_enabled is a device specific flag that only applies if the device
 //   is configured to increment register number automatically after a read
 //   0 = disabled, 1 = enabled
 // returns a 0 on success and -1 on failure
-int i2cWrite(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t value, uint8_t highByteFirst, uint8_t autoIncrementEnabled);
+int i2c_write(u16 address, u8 reg[], u8 num_reg, u32 value, u8 high_byte_first, u8 auto_increment_enabled);
 
 
 
@@ -85,7 +73,7 @@ int i2cWrite(uint16_t address, uint8_t reg[], uint8_t numRegisters, uint32_t val
 // I honestly can't anticipate a valid use for this since it's not like having the
 //   file open is that big a strain, but someone else may have better use, and its
 //   good practice to have this ability
-void i2cClose();
+void i2c_close(void);
 
 
 

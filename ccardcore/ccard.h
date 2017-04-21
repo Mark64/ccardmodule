@@ -15,25 +15,26 @@
 #ifndef _cleanheader
 #define _cleanheader
 
+#include<linux/types.h>
+
 // enum for values representing the DSA (deployable solar array) state
-enum DSAState {
+enum dsa_state {
 	stowed = 0b0000,    // 0
-	
+
 	// values that could be returned by getDSAState but should
 	//   not be used in setDSAState
 	releasing = 0b0001, // 1
 	deploying = 0b0100, // 4
-	
+
 	// acceptable values to use with setDSAState
 	released = 0b0010,  // 2
 	deployed = 0b1010,  // 10
-	
+
 	// error conditions
-	heatError = 0b1000, // 8
 	timeout = 0b1011,   // 9
 	// used if a requested DSA state is attempting to access
 	//   a non-existent DSA
-	numError = 0b1100   // 12
+	num_error = 0b1100   // 12
 };
 
 
@@ -60,7 +61,7 @@ enum DSAState {
 //   reverse signal at the same time, which is exactly how it's represented here
 
 // enum for values representing the magnetorquer state
-enum MTState {
+enum mt_state {
 	off = 0b00,          // 0
 	forward = 0b01,      // 1
 	reverse = 0b10,      // 2
@@ -75,6 +76,12 @@ enum MTState {
 	transitioning = 0b11 // 3
 };
 
+const u8 ccard_3v3_gpio = 102;
+const u8 ccard_5v0_gpio = 103;
+// 1 = on, 0 = off
+// flags: 0 = normal, !0 = emergency shutoff (ignore semaphore)
+void set_3v3_state(u8 state, s8 flags);
+void set_5v0_state(u8 state, s8 flags);
 
 // this function initializes the DSA hardware so that it is ready for release
 //   and/or deploy operations
@@ -83,7 +90,7 @@ enum MTState {
 //   reason, to run this multiple times and check for success, this should be
 //   called before running DSA operations
 // returns 0 on success and -1 on failure
-int initializeDSAHardware();
+s8 init_dsa(void);
 
 // this function initializes the magnetorquer hardware so that it is ready 
 // for forward or reverse operations
@@ -92,14 +99,14 @@ int initializeDSAHardware();
 //   reason, to run this multiple times and check for success, this should be
 //   called before running magnetorquer operations
 // returns 0 on success and -1 on failure
-int initializeMagnetorquerHardware();
+s8 init_mt(void);
 
 
 // cleans up data for the DSAs and turns off power
-void deinitializeDSAHardware();
+void cleanup_dsa(void);
 
 // clenas up data for the magnetoruqers and safely switches them off
-void deinitializeMagnetorquerHardware();
+void cleanup_mt(void);
 
 
 // these are used as the maximum time power should be on for the corresponding
@@ -111,19 +118,14 @@ void deinitializeMagnetorquerHardware();
 //   which allows these values (there are non-const values in the implementation that hold
 //   the user-selected values) to be altered without recompiling the kernel module
 // values here are listed in seconds
-extern const unsigned char releaseTimeoutMax = 50;
-extern const unsigned char deployTimeoutMax = 10;
-// this value indicates how many times a release or deploy operation should be
-//   attempted before giving up
-// a -1 indicates no limit
-extern const char releaseAttemptsMax = -1;
-extern const char deployAttemptsMax = -1;
+const u8 rel_timeout = 50;
+const u8 dep_timeout = 10;
 
 // these functions allow the user to override the constants set above with
 //   a runtime-configurable value, removing the need to recompile
 // desireTimeout is a value in seconds
-void setReleaseTimeoutMax(unsigned char desiredTimeout);
-void setDeployTimeoutMax(unsigned char desiredTimeout);
+void set_usr_rel_timeout(u8 desired_timeout);
+void set_usr_dep_timeout(u8 desired_timeout);
 
 
 
@@ -136,7 +138,7 @@ void setDeployTimeoutMax(unsigned char desiredTimeout);
 //   to the GPIO expander, rather than the intrepid's GPIOs
 //   this is made possible by adding a seconding GPIO expander for the
 //   magnetorquers, freeing up exactly the right number of GPIOs
-enum DSAState getDSAState(unsigned char dsaNumber);
+enum dsa_state get_dsa_state(u8 dsa);
 
 // this function returns an enum value representing the current state of
 //   magnetorquer <mtNumber>
@@ -144,7 +146,7 @@ enum DSAState getDSAState(unsigned char dsaNumber);
 //   if you're not careful because the transitioning state, while
 //   very short, may be the current state of the magnetorquer if you
 //   query this frequently, so just be aware of that
-enum MTState getMagnetorquerState(unsigned char mtNumber);
+enum mt_state get_mt_state(u8 mt);
 
 
 
@@ -176,7 +178,7 @@ enum MTState getMagnetorquerState(unsigned char mtNumber);
 //   state is to query the getDSAState(dsaNumber) function periodically
 //
 // desired state should be either <released> or <deployed>
-int setDSAState(unsigned char dsaNumber, enum DSAState desiredState);
+s8 set_dsa_state(u8 dsa, enum dsa_state desired_state);
 
 // this function sets magnetorquer <mtNumber> to the desired state indicated
 //   by <desiredState>
@@ -193,12 +195,7 @@ int setDSAState(unsigned char dsaNumber, enum DSAState desiredState);
 // setting the state to transitioning allows for a store magnetic field to
 //   discharge as it created a closed, short circuit across the 9.1ohm resistor,
 //   the magnetorquer coil, and an isolated branch of the H-bridge IC
-int setMagnetorquerState(unsigned char mtNumber, enum MTState desiredState);
-
-
-// used internally for logging output
-void log(char message[], int logLevel);
-
+s8 set_mt_state(u8 mt, enum mt_state desired_state);
 
 
 #endif
