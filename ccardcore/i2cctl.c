@@ -21,7 +21,7 @@
 // defaults to 1 because lets face it, thats normal
 static u8 _bus = 1;
 static int _i2cFile = -1000;
-
+static struct i2c_driver ccard_i2c;
 // this mutex is used to protect the i2c device from being used to do a read or write operations
 //   simulateously on another thread
 // if this weren't used, programs running on a separate thread trying to write to i2c devices
@@ -60,7 +60,7 @@ int i2c_init(void) {
 		snprintf(i2cBusName, 12, "/dev/i2c-%d", _bus);
 
 		_i2cFile = open(i2cBusName, O_RDWR);
-		
+
 		// this means an error has occured
 		if (_i2cFile < 0)
 			printk(KERN_ERR "Error opening i2c file: %d\nIn function i2c_init in i2cctl.cpp\n", _i2cFile);
@@ -93,7 +93,6 @@ void i2cClose(void) {
 // returns 0 for success and something else for error
 static int i2c_set_address(u16 address) {
 	// in case the bus was never set, this ensures the i2c device is always initialized
-	i2c_init();
 	
 	// needs lock access because this will disrupt concurrent operations
 	getLock();

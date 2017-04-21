@@ -14,3 +14,7 @@ tags
 
 
 
+/linux
+.tmp_versions
+Module.markers
+.built-in.o.cmd

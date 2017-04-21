@@ -6,30 +6,37 @@ SHELL := /bin/bash
 RM    := rm -rf
 MKDIR := mkdir -p
 
-TOOLCHAIN_GENERATOR_SCRIPT := installIntrepidToolchain
+ENV_PREPARE_SCRIPT := preparelinux.sh
 INSTALL_TEST := installTest
 
 KBUILD_FILE_DIRECTORY := $(PWD)/ccardcore
-KERNEL_SOURCE := /lib/modules/`uname -r`/build
+KERNEL_SOURCE := $(PWD)/linux/linux/ #/lib/modules/`uname -r`/build
+TOOLCHAIN_DIR := $(PWD)/linux/toolchain
+CROSS_COMPILE := $(TOOLCHAIN_DIR)/bin/arm-linux-
+
+BUILD_DIR := $(PWD)/build
+#export KBUILD_OUTPUT=$(BUILD_DIR)
+
+export MAKEARCH := $(MAKE) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE)
 
 all: toolchain
-	@ $(MAKE) modules
+	@ $(MAKE) module
 
 toolchain:
 	# installing the intrepid toolchain as defined by$(TOOLCHAIN_GENERATOR_SCRIPT)
-	@ (sh $(TOOLCHAIN_GENERATOR_SCRIPT))
+	@ (sh $(ENV_PREPARE_SCRIPT))
 
 module: 
-	$(MAKE) -C $(KERNEL_SOURCE) M=$(KBUILD_FILE_DIRECTORY)
+	@ (cd $(KERNEL_SOURCE) && $(MAKEARCH) -j 8 modules_prepare && cd $(PWD))
+	@ ($(MKDIR) $(BUILD_DIR))
+	$(MAKEARCH) -C $(KERNEL_SOURCE) M=$(KBUILD_FILE_DIRECTORY)
+	#@ (cd $(KBUILD_FILE_DIRECTORY) && mv *.o *.ko.cmd *.ko *.symvers *.mod.c modules.order Module.markers .tmp_versions .*.o .*.o.cmd *.ko .*.ko.cmd $(BUILD_DIR))
 
 install:
 	# copying build to system
 	@ (sh $(INSTALL_TEST))
 
 clean:
-	@  (cd ccardcore)
-	@- $(RM) *.ko.cmd *.ko *.symvers *.mod.c modules.order
-
-
+	@ $(RM) $(BUILD_DIR)
 
 

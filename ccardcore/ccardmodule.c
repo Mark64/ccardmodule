@@ -12,16 +12,18 @@
 #include "ccard.h"
 
 static int __init start_ccard(void);
-static int __exit poweroff_ccard(void);
+static void __exit poweroff_ccard(void);
 
 static struct semaphore sem3v3power;
 static struct semaphore sem5v0power;
 
 module_init(start_ccard);
 module_exit(poweroff_ccard);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Mark Hill <markleehill@gmail.com>");
 MODULE_VERSION("0.0.0");
+MODULE_SUPPORTED_DEVICE("intrepid-based ccard2");
+
 
 static int __init start_ccard(void)
 {
@@ -36,10 +38,10 @@ static int __init start_ccard(void)
 		printk(KERN_DEBUG "stop exporting gpio 103\n");
 
 
-	int exit = init_dsa();
-	ext |= init_mt();
-	if (exit)
-		return -1;
+//	int exit = init_dsa();
+//	ext |= init_mt();
+//	if (exit)
+//		return -1;
 
 
 	printk(KERN_NOTICE "hi irvine02\nccard2 mod here\n");
@@ -48,11 +50,11 @@ static int __init start_ccard(void)
 }
 
 static void __exit poweroff_ccard(void) {
-	cleanup_mt();
-	cleanup_dsa();
+//	cleanup_mt();
+//	cleanup_dsa();
 
-	set_3v3_state(0, 1);
-	set_5v0_state(0, 1);
+//	set_3v3_state(0, 1);
+//	set_5v0_state(0, 1);
 
 	gpio_free(102);
 	gpio_free(103);
@@ -64,7 +66,7 @@ static void __exit poweroff_ccard(void) {
 
 static inline void set_power(u8 gpio, u8 state, s8 flags) {
 	struct semaphore sem = (gpio == 102) ? sem3v3power : sem5v0power;
-	if (state == 0 && (down_trylock(&sem || flags)) {
+	if (state == 0 && (down_trylock(&sem) || flags)) {
 		gpio_direction_output(102, 0);
 		printk(KERN_NOTICE "turning off gpio %i\n", gpio);
 	} else {
@@ -74,11 +76,11 @@ static inline void set_power(u8 gpio, u8 state, s8 flags) {
 	}
 }
 
-static void set_3v3_state(u8 state, s8 flags) {
+void set_3v3_state(u8 state, s8 flags) {
 	set_power(102, state, flags);
 }
 
-static void set_5v0_state(u8 state, s8 flags) {
+void set_5v0_state(u8 state, s8 flags) {
 	set_power(103, state, flags);
 }
 

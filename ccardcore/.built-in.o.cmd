@@ -1,1 +1,0 @@
-cmd_/home/mark/documents/cubesat/ccardmodule/ccardcore/built-in.o :=  rm -f /home/mark/documents/cubesat/ccardmodule/ccardcore/built-in.o; ar rcsD /home/mark/documents/cubesat/ccardmodule/ccardcore/built-in.o
