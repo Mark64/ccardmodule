@@ -1,4 +1,3 @@
 #!/bin/bash
 
-scp ccardcore/ccardmodule.ko dvpn:~
 scp ccardcore/ccardmodule.ko gnd-irvine-01:/data/

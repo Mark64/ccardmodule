@@ -25,14 +25,14 @@ static const u8 _reverseBits[] = {1, 3, 5};
 // flag that indicates if the magnetorquer hardware has been
 //   initialized properly
 // 0 == initialized, -1 = uninitialized
-static s8 _isInitialized = -1;
+static s8 _mt_initialized = -1;
 
 
 // sets magnetorquer hardware into a default state and prepares
 //   for subsequent state changes
 s8 init_mt() {
 	// checks if the hardware has already been initialized
-	if (!_isInitialized)
+	if (!_mt_initialized)
 		return 0;
 
 	// configure all pins as outputs
@@ -54,12 +54,14 @@ s8 init_mt() {
 
 	printk(KERN_NOTICE "magnetorquer initialization successful\n");
 	// initializaton was successful
-	_isInitialized = 0;
+	_mt_initialized = 0;
 	return 0;
 }
 
 // cleans up and powers off the magnetorquer hardware
 void cleanup_mt() {
+	if (!_mt_initialized)
+		return;
 	// allows the magnetic field to be diss8ged before
 	//   shutting the hardware off
 	for (s8 i = 0; i < MT_COUNT; i++) {
@@ -67,12 +69,12 @@ void cleanup_mt() {
 	}
 
 	// resets the isInitialized flag
-	_isInitialized = -1;
+	_mt_initialized = -1;
 }
 
 // retrieves the state of magnetorquer <mt_num>
 enum mt_state get_mt_state(u8 mt_num) {
-	if (!_isInitialized)
+	if (!_mt_initialized)
 		return off;
 	// read the current value from the GPIO expander
 	u8 valbuf[1];
@@ -100,7 +102,7 @@ enum mt_state get_mt_state(u8 mt_num) {
 //   needed for a brief period of time
 // returns 0 if successful and -1 if not successful
 s8 set_mt_state(u8 mt_num, enum mt_state desired_state) {
-	if (!_isInitialized)
+	if (!_mt_initialized)
 		return 1;
 	// get the current state first to determine whether a transition state
 	//   is needed to prevent large back emf, and to determine if a

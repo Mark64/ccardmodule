@@ -38,7 +38,7 @@ static const u8 _dsa_dep_in[] = {6, 8};
 //   configured
 // 0 = initialized
 // -1 = uninitialzed
-static int _isInitialized = -1;
+static int _dsa_initialized = -1;
 
 // these store the user configured timeout values used by the system for the
 //   DSA operations
@@ -67,14 +67,14 @@ static int correct_dsa(u8 dsa);
 
 
 // stores the thread used to update the DSA states
-static struct task_struct *updateThread;
+static struct task_struct *_dsa_mntrd;
 
 
 // sets the initial state of the GPIO expander and initializes configuration values
 s8 init_dsa()
 {
 	// skip initialization if it has already been done
-	if (_isInitialized == 0)
+	if (_dsa_initialized == 0)
 		return 0;
 
 	// make sure the 3V3 power supply is off
@@ -105,22 +105,24 @@ s8 init_dsa()
 
 	// spawns the update thread, which ensures that the hardware state
 	//   reflects the values in desiredDSAStates
-	updateThread = kthread_create(&dsa_monitor, 0, "dsa_mntr");
-	if (IS_ERR(updateThread)) {
+	_dsa_mntrd = kthread_create(&dsa_monitor, 0, "dsa_mntr");
+	if (IS_ERR(_dsa_mntrd)) {
 		printk(KERN_ERR "failed to create dsa_mntr thread\n");
 		return -1;
 	}
-	wake_up_process(updateThread);
+	wake_up_process(_dsa_mntrd);
 
 	printk(KERN_NOTICE "dsa initialization successful\n");
 
-	_isInitialized = 0;
+	_dsa_initialized = 0;
 	return 0;
 }
 
 // cleans up and powers off the DSA hardware
 void cleanup_dsa()
 {
+	if (!_dsa_initialized)
+		return;
 	// since the update threads will exit when they detect a
 	//   change in the desired state, the desired state is set to to
 	//   stowed so that they can be closed
@@ -132,7 +134,7 @@ void cleanup_dsa()
 	msleep(1000);
 
 	// kill the main updating thread
-	kthread_stop(updateThread);
+	kthread_stop(_dsa_mntrd);
 
 	// turn off the outputs
 	s8 offreg = 0x01;
@@ -143,7 +145,7 @@ void cleanup_dsa()
 	set_3v3_state(0, 0);
 
 	// set the isInitialized flag off
-	_isInitialized = -1;
+	_dsa_initialized = -1;
 }
 
 
@@ -164,7 +166,7 @@ void set_usr_ccard_dep_timeout(u8 desiredTimeout)
 
 enum dsa_state get_dsa_state(u8 dsa)
 {
-	if (!_isInitialized)
+	if (!_dsa_initialized)
 		return stowed;
 
 	// check to make sure the dsa isn't out of bounds
@@ -178,7 +180,7 @@ enum dsa_state get_dsa_state(u8 dsa)
 
 s8 set_dsa_state(u8 dsa, enum dsa_state desiredState)
 {
-	if (!_isInitialized)
+	if (!_dsa_initialized)
 		return -1;
 	// first, we need to check the input to ensure it makes sense
 	//   and isn't going to put the system in an invalid state

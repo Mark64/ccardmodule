@@ -52,12 +52,12 @@ s8 ccard_init_i2c()
 {
 	// for a loadable module, registering the devices must be
 	//   done with i2c_new_device
-	printk(KERN_DEBUG "adapter address exists%i\n", \
-	       i2c_get_adapter(1) == NULL);
-	_dsa = i2c_new_device(i2c_get_adapter(1) , &ccard_board_info[0]);
-	_mt = i2c_new_device(i2c_get_adapter(1) , &ccard_board_info[1]);
+	// get the adapter for i2c bus 1
+	struct i2c_adapter *a = i2c_get_adapter(_i2c_bus);
+	_dsa = i2c_new_device(a , &ccard_board_info[0]);
+	_mt = i2c_new_device(a , &ccard_board_info[1]);
 	// for a builtin module, register the i2c devices with the kernel
-	//i2c_register_board_info(_i2c_bus, ccard_board_info, 
+	//i2c_register_board_info(_i2c_bus, ccard_board_info,
 	//			ARRAY_SIZE(ccard_board_info));
 	// initialize the driver
 	if (i2c_add_driver(&_drvr)) {
@@ -74,8 +74,6 @@ s8 ccard_init_i2c()
 void ccard_cleanup_i2c()
 {
 	printk(KERN_NOTICE "removing i2c driver from kernel\n");
-	cleanup_mt();
-	cleanup_dsa();
 	i2c_del_driver(&_drvr);
 }
 
@@ -103,11 +101,11 @@ static int ccard_i2c_remove(struct i2c_client *client)
 {
 	if (client->addr == _dsa_addr) {
 		printk(KERN_NOTICE "kernel wants to remove dsa controller\n");
-		cleanup_dsa();
+		//cleanup_dsa();
 	} else if (client->addr == _mt_addr) {
 		printk(KERN_NOTICE "kernel wants to remove magnetorquer \
 				controller\n");
-		cleanup_mt();
+		//cleanup_mt();
 	} else {
 		printk(KERN_ERR "anyone know why the kernel wants to remove \
 		       i2c slave at address %x and asked the c card driver \

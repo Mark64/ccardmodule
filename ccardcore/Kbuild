@@ -3,7 +3,7 @@
 ccflags-y := -std=gnu99 -Wno-declaration-after-statement
 
 obj-m := ccardmodule.o
-ccardmodule-y := magnetorquer.o dsa.o i2c_ccard.o
+#ccardmodule-objs := i2c_ccard.o #magnetorquer.o dsa.o i2c_ccard.o
 
 
 

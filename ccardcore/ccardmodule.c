@@ -10,6 +10,9 @@
 #include<linux/gpio.h>
 #include<linux/semaphore.h>
 #include "ccard.h"
+#include "i2c_ccard.c"
+#include "magnetorquer.c"
+#include "dsa.c"
 
 static int __init start_ccard(void);
 static void __exit poweroff_ccard(void);
@@ -19,7 +22,7 @@ static struct semaphore sem5v0power;
 
 module_init(start_ccard);
 module_exit(poweroff_ccard);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Mark Hill <markleehill@gmail.com>");
 MODULE_VERSION("0.0.0");
 MODULE_SUPPORTED_DEVICE("intrepid-based ccard2");
@@ -39,11 +42,11 @@ static int __init start_ccard(void)
 
 	// start the i2c driver which will start up all the
 	//   components attached to the i2c bus
-//	if (ccard_init_i2c()) {
-//		printk(KERN_ERR "failed to initialize i2c driver. \
+	if (ccard_init_i2c()) {
+		printk(KERN_ERR "failed to initialize i2c driver. \
 				c card module failed to load\n");
-//		return 1;
-//	}
+		return 1;
+	}
 
 	printk(KERN_NOTICE "hi irvine02\nit's nice and warm here \
 			in kernelspace\nkeep an eye out for \
@@ -53,7 +56,7 @@ static int __init start_ccard(void)
 }
 
 static void __exit poweroff_ccard(void) {
-//	ccard_cleanup_i2c();
+	ccard_cleanup_i2c();
 
 	gpio_free(102);
 	gpio_free(103);
