@@ -19,7 +19,7 @@ static struct semaphore sem5v0power;
 
 module_init(start_ccard);
 module_exit(poweroff_ccard);
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Mark Hill <markleehill@gmail.com>");
 MODULE_VERSION("0.0.0");
 MODULE_SUPPORTED_DEVICE("intrepid-based ccard2");
@@ -37,24 +37,23 @@ static int __init start_ccard(void)
 	if (pleasegive)
 		printk(KERN_DEBUG "stop exporting gpio 103\n");
 
+	// start the i2c driver which will start up all the
+	//   components attached to the i2c bus
+//	if (ccard_init_i2c()) {
+//		printk(KERN_ERR "failed to initialize i2c driver. \
+				c card module failed to load\n");
+//		return 1;
+//	}
 
-//	int exit = init_dsa();
-//	ext |= init_mt();
-//	if (exit)
-//		return -1;
-
-
-	printk(KERN_NOTICE "hi irvine02\nccard2 mod here\n");
+	printk(KERN_NOTICE "hi irvine02\nit's nice and warm here \
+			in kernelspace\nkeep an eye out for \
+			messages about i2c initialization\n");
 
 	return 0;
 }
 
 static void __exit poweroff_ccard(void) {
-//	cleanup_mt();
-//	cleanup_dsa();
-
-//	set_3v3_state(0, 1);
-//	set_5v0_state(0, 1);
+//	ccard_cleanup_i2c();
 
 	gpio_free(102);
 	gpio_free(103);

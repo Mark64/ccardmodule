@@ -13,8 +13,9 @@
 #include<linux/delay.h>
 #include<linux/time.h>
 #include<linux/gpio.h>
+#include<linux/i2c.h>
+#include<linux/device.h>
 
-#include "i2cctl.h"
 #include "ccard.h"
 
 #define DSA_COUNT 2
@@ -28,10 +29,10 @@ static const u8 _dsaControllerI2CAddress = 0x38;
 //   for DSA 'n + 1'
 // its a useless feature, because I don't think the cubesat will ever
 //   have more than 1 DSA, but who knows what the EXA has planned
-static const u8 _dsaReleaseActivateOutputs[] = {0, 2};
-static const u8 _dsaDeployActivateOutputs[] = {1, 3};
-static const u8 _dsaReleaseStatusInputs[] = {5, 7};
-static const u8 _dsaDeployStatusInputs[] = {6, 8};
+static const u8 _dsa_res_out[] = {0, 2};
+static const u8 _dsa_dep_out[] = {1, 3};
+static const u8 _dsa_res_in[] = {5, 7};
+static const u8 _dsa_dep_in[] = {6, 8};
 
 // flag indicating whether the DSA hardware has been properly
 //   configured
@@ -73,31 +74,34 @@ static struct task_struct *updateThread;
 s8 init_dsa()
 {
 	// skip initialization if it has already been done
-	if (_isInitialized == 0) {
+	if (_isInitialized == 0)
 		return 0;
-	}
 
 	// make sure the 3V3 power supply is off
 	set_3v3_state(0, 0);
 
 	// initializes the timeout values to the default included in the
 	//   header file
-	_userReleaseTimeout = rel_timeout;
-	_userDeployTimeout = dep_timeout;
+	_userReleaseTimeout = ccard_rel_timeout;
+	_userDeployTimeout = ccard_dep_timeout;
 
 	// initializes the pins as inputs or outputs, respectively
 	// setting a pin as an input requires a write of 1, while setting
 	//   it as an output requires a write of 0
-	u8 configurationValue = 0xf0;
-	u8 configurationRegister = 0x03;
-	u8 outputValue = 0x00;
-	u8 outputsRegister = 0x01;
-	int failure = i2c_write(_dsaControllerI2CAddress, &configurationRegister, 1, configurationValue, HIGH_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
-	failure |= i2c_write(_dsaControllerI2CAddress, &outputsRegister, 1, outputValue, HIGH_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
-	if (failure) {
-		printk(KERN_ERR "failed to configure DSA GPIO expander. Is the C Card connected?\n");
+	s8 cfgval = 0xf0;
+	s8 cfgreg = 0x03;
+	s8 cfgbuf[] = {cfgreg, cfgval};
+	s8 outval = 0x00;
+	s8 outreg = 0x01;
+	s8 outbuf[] = {outreg, outval};
+
+	if (i2c_master_send(dsa_expdr(), cfgbuf, 2) || \
+	    i2c_master_send(dsa_expdr(), outbuf, 2)) {
+		printk(KERN_ERR "failed to configure DSA GPIO expander. \
+				Is the C Card connected?\n");
 		return -1;
 	}
+
 
 	// spawns the update thread, which ensures that the hardware state
 	//   reflects the values in desiredDSAStates
@@ -108,8 +112,9 @@ s8 init_dsa()
 	}
 	wake_up_process(updateThread);
 
-	_isInitialized = 0;
+	printk(KERN_NOTICE "dsa initialization successful\n");
 
+	_isInitialized = 0;
 	return 0;
 }
 
@@ -130,9 +135,10 @@ void cleanup_dsa()
 	kthread_stop(updateThread);
 
 	// turn off the outputs
-	u8 outputRegister = 0x01;
-	u8 offValue = 0x00;
-	i2c_write(_dsaControllerI2CAddress, &outputRegister, 1, offValue, HIGH_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
+	s8 offreg = 0x01;
+	s8 offval = 0x00;
+	s8 offbuf[] = {offreg, offval};
+	i2c_master_send(dsa_expdr(), offbuf, 2);
 
 	set_3v3_state(0, 0);
 
@@ -143,30 +149,27 @@ void cleanup_dsa()
 
 // this sets the user-configurable timeout value, resulting in the software using that
 //   value rather than the value included in the header
-void set_usr_rel_timeout(u8 desiredTimeout)
+void set_usr_ccard_rel_timeout(u8 desiredTimeout)
 {
-	// initialize if the user hasn't done that already
-	init_dsa();
 	_userReleaseTimeout = desiredTimeout;
 }
 
 // this sets the user-configurable timeout value, resulting in the software using that
 //   value rather than the value included in the header
-void set_usr_dep_timeout(u8 desiredTimeout)
+void set_usr_ccard_dep_timeout(u8 desiredTimeout)
 {
-	// initialize if the user hasn't done that already
-	init_dsa();
 	_userDeployTimeout = desiredTimeout;
 }
 
 
 enum dsa_state get_dsa_state(u8 dsa)
 {
-	// initialize if the user hasn't done that already
-	init_dsa();
+	if (!_isInitialized)
+		return stowed;
+
 	// check to make sure the dsa isn't out of bounds
 	if (dsa >= DSA_COUNT) {
-		printk(KERN_ERR "invalid DSA number %i in get_dsa_state\n", dsa);
+		printk(KERN_ERR "dsa %i does not exist\n", dsa);
 		return num_error;
 	}
 
@@ -175,15 +178,15 @@ enum dsa_state get_dsa_state(u8 dsa)
 
 s8 set_dsa_state(u8 dsa, enum dsa_state desiredState)
 {
-	// initialize if the user hasn't done that already
-	init_dsa();
+	if (!_isInitialized)
+		return -1;
 	// first, we need to check the input to ensure it makes sense
 	//   and isn't going to put the system in an invalid state
 	// lets get the current state
 	// and if you're wondering why this isn't in the lock,
 	//   its because the lock is handled by get_dsa_state
 	if (dsa >= DSA_COUNT) {
-		printk(KERN_ERR "invalid DSA number in set_dsa_state\n");
+		printk(KERN_ERR "dsa %i does not exist\n", dsa);
 		return -1;
 	}
 
@@ -192,11 +195,12 @@ s8 set_dsa_state(u8 dsa, enum dsa_state desiredState)
 	//   not the input makes sense
 	int returnValue = -1;
 	if (desiredState != released || desiredState != deployed) {
-		printk(KERN_ERR "incompatible desired state in set_dsa_state\n");
+		printk(KERN_ERR "impossible desired state in set_dsa_state\n");
 		return returnValue;
 	}
 	if (desiredState == deployed && currentState == stowed) {
-		printk(KERN_ERR "performing deploy operation while DSA %i is currently stored. Possible error\n", dsa);
+		printk(KERN_ERR "performing deploy operation while DSA %i is \
+				currently stored. Possible error\n", dsa);
 		returnValue = 3;
 	}
 
@@ -226,7 +230,8 @@ static int dsa_monitor(void *junkInput)
 
 	// create semaphores for keeping track of thread activity
 	for (int i = 0; i < DSA_COUNT * 2; i++) {
-		op_act[i] = (struct semaphore *)kmalloc(sizeof(struct semaphore), GFP_KERNEL);
+		op_act[i] = (struct semaphore *)\
+			    kmalloc(sizeof(struct semaphore), GFP_KERNEL);
 		sema_init(op_act[i], 0);
 	}
 
@@ -246,42 +251,59 @@ static int dsa_monitor(void *junkInput)
 		//   input registers as one byte, and the value of its
 		//   output registers as a second byte
 		// both are needed to determine the state of the software
-		u8 inputRegister = 0x00;
-		u8 outputRegister = 0x01;
-		u8 registers[] = {inputRegister, outputRegister};
+		s8 inreg[] = {0x00};
+		s8 outreg[] = {0x01};
+
+		s8 inbuf[1];
+		s8 outbuf[1];
+
 		// the first value in this array is the input value, second
 		//   value is the output value
-		u32 gpioState[2] = {0};
+		u8 gpioState[2] = {};
 
-		int success = i2c_read(_dsaControllerI2CAddress, registers, 2, gpioState, WORD_8_BIT, HIGH_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
-		if (success != 0) {
-			printk(KERN_ERR "failed to read DSA state from i2c device. C Card unplugged?\n");
+
+		if (i2c_master_send(dsa_expdr(), inreg, 1) || \
+		    i2c_master_recv(dsa_expdr(), inbuf, 1) || \
+		    i2c_master_send(dsa_expdr(), outreg, 1) || \
+		    i2c_master_recv(dsa_expdr(), outbuf, 1)) {
+			printk(KERN_ERR "failed to read dsa state. is c card \
+			       unplugged?");
 		} else {
-			for (int i = 0; i < DSA_COUNT; i++) {
-				// uses the bit number (big endian format) to shift the bits
-				//   and determine the corresponding value
-				u16 inputReleaseValue = (gpioState[0] >> _dsaReleaseStatusInputs[i]) & 0b0001;
-				u16 inputDeployValue = (gpioState[0] >> _dsaDeployStatusInputs[i]) & 0b0001;
-				u16 outputReleaseValue = (gpioState[1] >> _dsaReleaseActivateOutputs[i]) & 0b0001;
-				u16 outputDeployValue = (gpioState[1] >> _dsaDeployActivateOutputs[i]) & 0b0001;
+			gpioState[0] = inbuf[0];
+			gpioState[1] = outbuf[0];
+		}
 
-				// because its technically possible to run a deploy operation without
-				//   having first released the DSAs, the raw enumvalue for deploying 
-				//   ignores the input release value, so when a deploy operation is 
-				//   running, the input release value must be set to zero regardless 
-				//   of its true value
-				if (outputDeployValue == 1)
-					inputReleaseValue = 0;
+		for (int i = 0; i < DSA_COUNT; i++) {
+			// uses the bit number (big endian format) to shift the bits
+			//   and determine the corresponding value
+			u16 in_res_val = (gpioState[0] >> \
+					  _dsa_res_in[i]) & 0b0001;
+			u16 in_dep_val = (gpioState[0] >> \
+					  _dsa_dep_in[i]) & 0b0001;
+			u16 out_res_val = (gpioState[1] >> \
+					   _dsa_res_out[i]) & 0b0001;
+			u16 out_dep_val = (gpioState[1] >> \
+					   _dsa_dep_out[i]) & 0b0001;
 
-				// now, thanks to bitwise operations and a clever setup of the DSAState enum
-				//   raw values, creating the proper state value is easy
-				// to understand why the bits are shifted by the amount here, see
-				//   the raw enum values in cleanccard.h
-				enum dsa_state state = (inputReleaseValue << 1) + (inputDeployValue << 1) + (inputDeployValue << 3) + outputReleaseValue + (outputDeployValue << 2);
+			// because its technically possible to run a deploy operation without
+			//   having first released the DSAs, the raw enumvalue for deploying
+			//   ignores the input release value, so when a deploy operation is
+			//   running, the input release value must be set to zero regardless
+			//   of its true value
+			if (out_dep_val == 1)
+				in_res_val = 0;
 
-				// now set the corresponding current state value
-				_currentDSAStates[i] = state;
-			}
+			// now, thanks to bitwise operations and a clever setup of the DSAState enum
+			//   raw values, creating the proper state value is easy
+			// to understand why the bits are shifted by the amount here, see
+			//   the raw enum values in cleanccard.h
+			enum dsa_state state = (in_res_val << 1) + \
+					       (in_dep_val << 1) + \
+					       (in_dep_val << 3) + \
+					       out_res_val + (out_dep_val << 2);
+
+			// now set the corresponding current state value
+			_currentDSAStates[i] = state;
 		}
 
 		// discrepancy check section
@@ -300,17 +322,20 @@ static int dsa_monitor(void *junkInput)
 			// the states will differ while a correction is in progress,
 			//   so this avoids a false flag (note: does not avoid 9/11)
 			if (des != cur) {
-				if (op_threads[i * 2] != NULL && down_trylock(op_act[i * 2])) {
+				if (op_threads[i * 2] != NULL \
+				    && down_trylock(op_act[i * 2])) {
 					kthread_stop(op_threads[i * 2]);
 					op_threads[i * 2] = NULL;
 					dsaDiscrepancies[i] = 1;
 				}
-				if (op_threads[i * 2 + 1] != NULL && down_trylock(op_act[i * 2 + 1])) {
+				if (op_threads[i * 2 + 1] != NULL && \
+				    down_trylock(op_act[i * 2 + 1])) {
 					kthread_stop(op_threads[i * 2 + 1]);
 					op_threads[i * 2 + 1] = NULL;
 					dsaDiscrepancies[i] = 1;
 				}
-				if (op_threads[i * 2] == NULL || op_threads[i * 2 + 1] == NULL)
+				if (op_threads[i * 2] == NULL || \
+				    op_threads[i * 2 + 1] == NULL)
 					dsaDiscrepancies[i] = 1;
 			}
 		}
@@ -350,18 +375,40 @@ static int dsa_monitor(void *junkInput)
 }
 
 
-static int shutoff_dsa(u8 dsa) {
-	u8 reg = 0x01;
-	u8 mask = (0x01 << _dsaReleaseActivateOutputs[dsa]) + (0x01 << _dsaDeployActivateOutputs[dsa]);
-	u32 val = 0;
-	int success = i2c_read(_dsaControllerI2CAddress, &reg, 1, &val, WORD_8_BIT, LOW_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
-	val &= mask;
-	success |= i2c_write(_dsaControllerI2CAddress, &reg, 1, val, LOW_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
+static int shutoff_dsa(u8 dsa)
+{
+	// flag indicating failure condition
+	s8 failure = 0;
 
-	if (!success) {
-		set_3v3_state(0, 0);
+	s8 valreg[] = {0x01};
+	// read the existing value so that only the bit for this operation
+	//   is changed
+	s8 valbuf[1];
+	if (i2c_master_send(dsa_expdr(), valreg, 1) || \
+	    i2c_master_recv(dsa_expdr(), valbuf, 1)) {
+		printk(KERN_ERR "error reading dsa state for dsa %i", dsa);
+		failure = 1;
+	} else {
+		// mask used to set proper bits off
+		u8 mask = (0x01 << _dsa_res_out[dsa]) + \
+			  (0x01 << _dsa_dep_out[dsa]);
+		// now change the proper bit to enable release
+		valbuf[0] = (s8)((u8)valbuf[0] & mask);
+		// write the changed value
+		s8 writebuf[] = {valreg[0], valbuf[0]};
+		if (i2c_master_send(dsa_expdr(), writebuf, 2)) {
+			printk(KERN_ERR "error shutting off dsa %i", dsa);
+			failure = 1;
+		}
 	}
-	return success;
+
+	if (failure)
+		printk(KERN_EMERG "failed to shut off power to dsa %i. \
+				shutting off 3v3 supply to minimizei \
+				damage to c card", dsa);
+
+	set_3v3_state(0, failure);
+	return failure;
 }
 
 
@@ -372,7 +419,8 @@ static inline int exec_dsa_op(u8 dsa, u8 op)
 	const char *opstr = (op == 0) ? "release" : "deploy";
 	const s8 timeout = (op == 0) ? _userReleaseTimeout : _userDeployTimeout;
 	const enum dsa_state desired = (op == 0) ? released : deployed;
-	const u8 *pins = (op == 0) ? _dsaReleaseActivateOutputs : _dsaDeployActivateOutputs;
+	const u8 *pins = (op == 0) ? \
+			 _dsa_res_out : _dsa_dep_out;
 
 	// up the semaphore to show activity
 	for (u8 i = 0; i < 10; i++) {
@@ -380,7 +428,7 @@ static inline int exec_dsa_op(u8 dsa, u8 op)
 	}
 
 	// log that the thread was started
-	printk(KERN_ERR "%s thread successfully created\n", opstr);
+	printk(KERN_NOTICE "%s thread successfully created\n", opstr);
 
 	// get the start time, which will be used to determine if the operation has timed out
 	struct timespec start = current_kernel_time();
@@ -394,20 +442,24 @@ static inline int exec_dsa_op(u8 dsa, u8 op)
 
 	// turn on the GPIO on the expander which will enable power to
 	//   the proper switch for the operation
-	u8 reg = 0x01;
+	s8 valreg[] = {0x01};
 	// read the existing value so that only the bit for this operation
 	//   is changed
-	u32 value = 0;
-	int success = i2c_read(_dsaControllerI2CAddress, &reg, 1, &value, WORD_8_BIT, LOW_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
+	s8 valbuf[1];
+	if (i2c_master_send(dsa_expdr(), valreg, 1) || \
+	    i2c_master_recv(dsa_expdr(), valbuf, 1)) {
+		printk(KERN_ERR "error reading dsa state for dsa %i", dsa);
+		return 1;
+	}
+
 	// now change the proper bit to enable release
-	u8 bit = pins[dsa];
-	u8 mask = (0x01 << bit);
-	value |= mask;
+	u8 mask = (0x01 << pins[dsa]);
+	valbuf[0] = (s8)((u8)valbuf[0] | mask);
 	// write the changed value
-	success |= i2c_write(_dsaControllerI2CAddress, &reg, 1, value, LOW_BYTE_FIRST, AUTO_INCREMENT_DISABLED);
-	if (success != 0) {
-		printk(KERN_ERR "dsa %i %s operation failed. Thread exiting\n", dsa, opstr);
-		return 0;
+	s8 writebuf[] = {valreg[0], valbuf[0]};
+	if (i2c_master_send(dsa_expdr(), writebuf, 2)) {
+		printk(KERN_ERR "dsa %i %s operation failed\n", dsa, opstr);
+		return 1;
 	}
 
 	// loop that runs until the operaton has completed
@@ -420,16 +472,20 @@ static inline int exec_dsa_op(u8 dsa, u8 op)
 		// check the current time
 		struct timespec currentTime = current_kernel_time();
 		if (currentTime.tv_sec - start.tv_sec > timeout) {
+			printk(KERN_NOTICE "dsa %i %s operation \
+					timed out", dsa, opstr);
 			break;
 		}
 		// check the current state
 		if (_currentDSAStates[dsa] == desired) {
-			printk(KERN_ERR "dsa %i %s operation successful. thread exiting\n", dsa, opstr);
+			printk(KERN_NOTICE "dsa %i %s operation \
+					successful", dsa, opstr);
 			break;
 		}
 		// check if the user no longer wants a deploy operation to occur
 		if (_desiredDSAStates[dsa] != desired) {
-			printk(KERN_ERR "user requested dsa %i %s operation termination. thread exiting\n", dsa, opstr);
+			printk(KERN_NOTICE "user requested dsa %i %s operation \
+					termination", dsa, opstr);
 			break;
 		}
 
@@ -437,18 +493,8 @@ static inline int exec_dsa_op(u8 dsa, u8 op)
 		msleep(200);
 	}
 
-	// turn off power to the switch
-	mask = 0xff ^ mask;
-	value &= mask;
-	// write the value to turn the switch off
-	// very important that power is shut off, so this operation is run multiple times in case
-	for (int i = 0; i < 4 || success == 0; i++) {
-		success = shutoff_dsa(dsa);
-	}
-	if (success != 0) {
-		set_3v3_state(0, 1);
-		printk(KERN_EMERG "WARNING: UNABLE TO SWITCH OFF DSA %s POWER. Shutting off 3V3 power supply. May interrupt operations\n", opstr);
-	}
+	// turn the switch off
+	shutoff_dsa(dsa);
 
 	int done;
 	do {
@@ -499,49 +545,49 @@ static int correct_dsa(u8 dsa)
 		return -1;
 	}
 
-	int returnValue = -1;
 	// determines the discrepancy and schedules an operation if needed
 	enum dsa_state cur = _currentDSAStates[dsa];
 	enum dsa_state des = _desiredDSAStates[dsa];
 	if (cur == releasing || cur == deploying) {
 		printk(KERN_ERR "possible duplicate call to correct_dsa. exiting\n");
-		returnValue = 0;
+		return 0;
 
 	} else if (des == released && cur == stowed) {
-		printk(KERN_DEBUG "scheduling release operation. watch for log message indicating release thread was started\n");
+		printk(KERN_DEBUG "scheduling release operation\n");
 
 		// creates a thread to release the specified DSA and manage timeouts
 		u8 *d = (u8 *)kmalloc(sizeof(u8), GFP_KERNEL);
 		*d = dsa;
-		struct task_struct *res = kthread_run(&res_dsa, d, "res_dsa%i", *d);
+		struct task_struct *res = kthread_run(&res_dsa, d, \
+						      "res_dsa%i", *d);
 		if (IS_ERR(res)) {
 			printk(KERN_ERR "failed to create res_dsa thread\n");
-			returnValue = -1;
-		}
-		else {
-			returnValue = 0;
+			return 1;
+		} else {
+			return 0;
 		}
 	} else if (des == deployed && (cur == released || cur == stowed)) {
-		printk(KERN_DEBUG "scheduling deploy operation. watch for log message indicating deploy thread was started\n");
+		printk(KERN_DEBUG "scheduling deploy operation\n");
 
 		// creates a thread to deploy the specified DSA and manage timeouts
 		u8 *d = (u8 *)kmalloc(sizeof(u8), GFP_KERNEL);
 		*d = dsa;
-		struct task_struct *dply = kthread_run(&dep_dsa, d, "dply_dsa%i", *d);
+		struct task_struct *dply = kthread_run(&dep_dsa, d, \
+						       "dply_dsa%i", *d);
 		if (IS_ERR(dply)) {
 			printk(KERN_ERR "failed to create dep_dsa thread\n");
-			returnValue = -1;
+			return 1;
 		}
 		else {
-			returnValue = 0;
+			return 0;
 		}
 	} else if (des == stowed && (cur != released || cur != deployed)) {
 		printk(KERN_ERR "power cut to DSA %i based on desired state = stowed\n", dsa);
 		shutoff_dsa(dsa);
-		returnValue = 0;
+		return 0;
 	}
 
-	return returnValue;
+	return 1;
 }
 
 

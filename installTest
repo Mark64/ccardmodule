@@ -1,4 +1,4 @@
 #!/bin/bash
 
 scp ccardcore/ccardmodule.ko dvpn:~
-ssh dvpn "scp ~/ccardmodule.ko gnd-irvine-01:/data/"
+scp ccardcore/ccardmodule.ko gnd-irvine-01:/data/

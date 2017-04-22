@@ -1,10 +1,10 @@
 // I decided to go with a unified header file for all system calls
-// 
+//
 // this is the only header file you need for cleanccard system calls
 //
 // there may be other headers in the project, but they should only be used
 //   when building the kernel module
-// 
+//
 // all internal hardware operations (deployment, magnetorquer switching, etc)
 //   are handled on separate threads
 // all status querying operations don't need to be concerned with this, status
@@ -12,10 +12,12 @@
 
 // preprocessor macros (along with the endif at the bottom) are used to prevent
 //   including the same file twice in projects with lots of header files
-#ifndef _cleanheader
-#define _cleanheader
 
 #include<linux/types.h>
+#include<linux/i2c.h>
+
+#ifndef _cleanheader
+#define _cleanheader
 
 // enum for values representing the DSA (deployable solar array) state
 enum dsa_state {
@@ -76,31 +78,34 @@ enum mt_state {
 	transitioning = 0b11 // 3
 };
 
-const u8 ccard_3v3_gpio = 102;
-const u8 ccard_5v0_gpio = 103;
+#define ccard_3v3_gpio 102
+#define ccard_5v0_gpio 103
 // 1 = on, 0 = off
 // flags: 0 = normal, !0 = emergency shutoff (ignore semaphore)
 void set_3v3_state(u8 state, s8 flags);
 void set_5v0_state(u8 state, s8 flags);
 
+// returns a struct containing the i2c infomation for the GPIO expanders
+// these are implemented by their respective controllers
+struct i2c_client *dsa_expdr(void);
+struct i2c_client *mt_expdr(void);
+
 // this function initializes the DSA hardware so that it is ready for release
 //   and/or deploy operations
-// it is not necessary to run this, as attempting a set or get operation will
-//   run this, but it will only run once, so if it is necessary, for whatever
-//   reason, to run this multiple times and check for success, this should be
-//   called before running DSA operations
+// the parameter is passed by the i2c driver and contains the i2c adapter
 // returns 0 on success and -1 on failure
 s8 init_dsa(void);
 
-// this function initializes the magnetorquer hardware so that it is ready 
+// this function initializes the magnetorquer hardware so that it is ready
 // for forward or reverse operations
-// it is not necessary to run this, as attempting a set or get operation will
-//   run this, but it will only run once, so if it is necessary, for whatever
-//   reason, to run this multiple times and check for success, this should be
-//   called before running magnetorquer operations
+// the paramter is the i2c adapter for the client hardware
 // returns 0 on success and -1 on failure
 s8 init_mt(void);
 
+// starts the i2c driver
+s8 ccard_init_i2c(void);
+// ends the i2c driver
+void ccard_cleanup_i2c(void);
 
 // cleans up data for the DSAs and turns off power
 void cleanup_dsa(void);
@@ -118,8 +123,8 @@ void cleanup_mt(void);
 //   which allows these values (there are non-const values in the implementation that hold
 //   the user-selected values) to be altered without recompiling the kernel module
 // values here are listed in seconds
-const u8 rel_timeout = 50;
-const u8 dep_timeout = 10;
+#define ccard_rel_timeout 50
+#define ccard_dep_timeout 10
 
 // these functions allow the user to override the constants set above with
 //   a runtime-configurable value, removing the need to recompile
@@ -134,7 +139,7 @@ void set_usr_dep_timeout(u8 desired_timeout);
 // this is a relatively instantaneous function, and simply queries the
 //   GPIO expander connected to the DSAs and checks the GPIO inputs
 //   from the DSA sense cable
-// Oh yeah thats another improvement, the DSA sense pins actually route 
+// Oh yeah thats another improvement, the DSA sense pins actually route
 //   to the GPIO expander, rather than the intrepid's GPIOs
 //   this is made possible by adding a seconding GPIO expander for the
 //   magnetorquers, freeing up exactly the right number of GPIOs
@@ -156,8 +161,8 @@ enum mt_state get_mt_state(u8 mt);
 // if that fails because of a hardware issue, i2c access problem,
 //   or because <desiredState> indicated an impossible transition
 //   (such as transitioning from released to stowed, which must be
-//   done manually, or asking to transition to releasing or deploying, 
-//   which are intermediates and do not represent a discrete state), 
+//   done manually, or asking to transition to releasing or deploying,
+//   which are intermediates and do not represent a discrete state),
 //   then this function will halt and return -1, indicating
 //   an error
 // however, you'll notice that a transition from stowed to released is
@@ -186,11 +191,11 @@ s8 set_dsa_state(u8 dsa, enum dsa_state desired_state);
 //   you use a value from the MTState enum} and the system has successfully
 //   transitioned to that state
 // this function, unlike setDSAState, executes hardware changes on a the calling
-//   thread, so it does not requires the user to query getMagnetorquer state, 
+//   thread, so it does not requires the user to query getMagnetorquer state,
 //   though this function will take a longer period of time to return,
 //   unlike the DSA function
 // <transitioning> is an acceptable state here as it is useful when debugging
-//   the hardware, though it is unnecessary to do in normal operation as the 
+//   the hardware, though it is unnecessary to do in normal operation as the
 //   implementation already handles switching to that as an intermediate state
 // setting the state to transitioning allows for a store magnetic field to
 //   discharge as it created a closed, short circuit across the 9.1ohm resistor,

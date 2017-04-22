@@ -27,16 +27,16 @@ toolchain:
 	@ (sh $(ENV_PREPARE_SCRIPT))
 
 module: 
-	@ (cd $(KERNEL_SOURCE) && $(MAKEARCH) -j 8 modules_prepare && cd $(PWD))
-	@ ($(MKDIR) $(BUILD_DIR))
-	$(MAKEARCH) -C $(KERNEL_SOURCE) M=$(KBUILD_FILE_DIRECTORY)
-	#@ (cd $(KBUILD_FILE_DIRECTORY) && mv *.o *.ko.cmd *.ko *.symvers *.mod.c modules.order Module.markers .tmp_versions .*.o .*.o.cmd *.ko .*.ko.cmd $(BUILD_DIR))
+	$(MAKEARCH) -C $(KERNEL_SOURCE) M=$(KBUILD_FILE_DIRECTORY) modules
 
 install:
 	# copying build to system
 	@ (sh $(INSTALL_TEST))
 
 clean:
+	@ (cd $(KBUILD_FILE_DIRECTORY) && mv *.o *.ko.cmd *.ko *.symvers *.mod.c modules.order .tmp_versions .*.o.cmd *.ko .*.ko.cmd $(BUILD_DIR))
 	@ $(RM) $(BUILD_DIR)
 
+reallyclean: clean
+	@ (RM) linux/
 

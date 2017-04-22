@@ -52,6 +52,7 @@ cd $LINUX_DEST_DIR
 git pull
 cp polysat.config .config
 $MAKEARCH menuconfig
+$MAKEARCH -j 8 modules_prepare
 cd $CUR_DIR
 
 
