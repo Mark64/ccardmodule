@@ -8,7 +8,6 @@
 
 #include "ccard.h"
 
-
 // function definition for the i2c_driver struct
 static int ccard_i2c_probe(struct i2c_client *client, \
 			   const struct i2c_device_id *id);
@@ -36,8 +35,10 @@ static struct i2c_device_id ccard_i2c_ids[] = {
 
 // struct containing i2c driver info for the c card
 static struct i2c_driver _drvr = {
+	.id = 64,
 	.driver = {
 		.name = "ccard_i2c_drvr",
+		.owner = THIS_MODULE,
 	},
 	.probe = ccard_i2c_probe,
 	.remove = ccard_i2c_remove,
@@ -47,9 +48,19 @@ static struct i2c_driver _drvr = {
 static struct i2c_client *_dsa;
 static struct i2c_client *_mt;
 
+static struct semaphore _ccard_i2c_lock;
+
+// creates the controller devices for the corresponding
+//   gpio expander chip
+static inline void create_dsa_expdr_device(void);
+static inline void create_mt_expdr_device(void);
+
 // initializes the i2c driver for the c card
 s8 ccard_init_i2c()
 {
+	// create the semaphore
+	sema_init(&_ccard_i2c_lock, 1);
+
 	// for a loadable module, registering the devices must be
 	//   done with i2c_new_device
 	// get the adapter for i2c bus 1
@@ -84,11 +95,13 @@ static int ccard_i2c_probe(struct i2c_client *client, \
 	if (client->addr == _dsa_addr) {
 		printk(KERN_NOTICE "found dsa controller\n");
 		_dsa = client;
-		return 0;//init_dsa();
+		create_dsa_expdr_device();
+		return init_dsa();
 	} else if (client->addr == _mt_addr) {
 		printk(KERN_NOTICE "found magnetorquer controller\n");
 		_mt = client;
-		return 0;//init_mt();
+		create_mt_expdr_device();
+		return init_mt();
 	} else {
 		printk(KERN_ERR "found unknown i2c slave at address %x", \
 				client->addr);
@@ -101,11 +114,11 @@ static int ccard_i2c_remove(struct i2c_client *client)
 {
 	if (client->addr == _dsa_addr) {
 		printk(KERN_NOTICE "kernel wants to remove dsa controller\n");
-		//cleanup_dsa();
+		cleanup_dsa();
 	} else if (client->addr == _mt_addr) {
 		printk(KERN_NOTICE "kernel wants to remove magnetorquer \
 				controller\n");
-		//cleanup_mt();
+		cleanup_mt();
 	} else {
 		printk(KERN_ERR "anyone know why the kernel wants to remove \
 		       i2c slave at address %x and asked the c card driver \
@@ -116,7 +129,17 @@ static int ccard_i2c_remove(struct i2c_client *client)
 }
 
 
+// locks the i2c bus
+int ccard_lock_bus()
+{
+	return down_interruptible(&_ccard_i2c_lock);
+}
 
+// unlocks the i2c bus
+void ccard_unlock_bus()
+{
+	up(&_ccard_i2c_lock);
+}
 
 
 // returns the i2c_client struct for the magnetorquer GPIO expdr
@@ -130,5 +153,32 @@ struct i2c_client *dsa_expdr()
 {
 	return _dsa;
 }
+
+
+
+//
+// sysfs section
+//
+
+static inline void name_i2c_client(struct i2c_client *client, \
+				   const char name[])
+{
+	scnprintf(client->name, I2C_NAME_SIZE, name);
+	//scnprintf(client->dev.init_name, I2C_NAME_SIZE, name);
+}
+
+static inline void create_dsa_expdr_device()
+{
+	name_i2c_client(_dsa, "dsa_expdr");
+
+}
+
+static inline void create_mt_expdr_device()
+{
+	name_i2c_client(_mt, "mt_expdr");
+
+}
+
+
 
 
