@@ -48,7 +48,7 @@ static struct i2c_driver _drvr = {
 static struct i2c_client *_dsa;
 static struct i2c_client *_mt;
 
-static struct semaphore _ccard_i2c_lock;
+static struct mutex *_ccard_i2c_lock;
 
 // creates the controller devices for the corresponding
 //   gpio expander chip
@@ -58,13 +58,11 @@ static inline void create_mt_expdr_device(void);
 // initializes the i2c driver for the c card
 s8 ccard_init_i2c()
 {
-	// create the semaphore
-	sema_init(&_ccard_i2c_lock, 1);
-
 	// for a loadable module, registering the devices must be
 	//   done with i2c_new_device
 	// get the adapter for i2c bus 1
 	struct i2c_adapter *a = i2c_get_adapter(_i2c_bus);
+	_ccard_i2c_lock = &a->clist_lock;
 	_dsa = i2c_new_device(a , &ccard_board_info[0]);
 	_mt = i2c_new_device(a , &ccard_board_info[1]);
 	// for a builtin module, register the i2c devices with the kernel
@@ -85,6 +83,10 @@ s8 ccard_init_i2c()
 void ccard_cleanup_i2c()
 {
 	printk(KERN_NOTICE "removing i2c driver from kernel\n");
+	if (_mt != NULL)
+		i2c_unregister_device(_mt);
+	if (_dsa != NULL)
+		i2c_unregister_device(_dsa);
 	i2c_del_driver(&_drvr);
 }
 
@@ -115,10 +117,12 @@ static int ccard_i2c_remove(struct i2c_client *client)
 	if (client->addr == _dsa_addr) {
 		printk(KERN_NOTICE "kernel wants to remove dsa controller\n");
 		cleanup_dsa();
+		_dsa = NULL;
 	} else if (client->addr == _mt_addr) {
 		printk(KERN_NOTICE "kernel wants to remove magnetorquer \
 				controller\n");
 		cleanup_mt();
+		_mt = NULL;
 	} else {
 		printk(KERN_ERR "anyone know why the kernel wants to remove \
 		       i2c slave at address %x and asked the c card driver \
@@ -132,13 +136,13 @@ static int ccard_i2c_remove(struct i2c_client *client)
 // locks the i2c bus
 int ccard_lock_bus()
 {
-	return down_interruptible(&_ccard_i2c_lock);
+	return mutex_lock_interruptible(_ccard_i2c_lock);
 }
 
 // unlocks the i2c bus
 void ccard_unlock_bus()
 {
-	up(&_ccard_i2c_lock);
+	mutex_unlock(_ccard_i2c_lock);
 }
 
 

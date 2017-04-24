@@ -9,6 +9,7 @@
 #include<linux/device.h>
 #include<linux/sysfs.h>
 #include<linux/string.h>
+#include<linux/fs.h>
 
 #include "ccard.h"
 
@@ -38,8 +39,12 @@ static ssize_t write_mt_state(struct device *dev, \
 				 struct device_attribute *attr, \
 				 const char *buf, size_t count);
 
+// stores the magnetorquer class
+static struct class _mt_class;
+// stores the device numbers
+static dev_t _dev_mt[MT_COUNT];
 // stores the device structs
-static struct device _mt_devices[MT_COUNT];
+static struct device *_mt_devices[MT_COUNT];
 // device attributes for the magnetorquers
 static DEVICE_ATTR(state, S_IRUSR | S_IWUSR, read_mt_state, \
 		   write_mt_state);
@@ -60,22 +65,21 @@ s8 init_mt() {
 	s8 cfgreg = 0x03;
 	s8 cfgval = 0x00;
 	const char buf[] = {cfgreg, cfgval};
-	if (ccard_lock_bus()) {
-		printk(KERN_ERR "unable to lock i2c bus\n");
-		return 1;
-	}
-	s8 failure = i2c_master_send(mt_expdr(), buf, 2) < 2;
 	// write all off to the i2c device
 	s8 outreg = 0x01;
 	s8 outval = 0x00;
 	const char buf2[] = {outreg, outval};
-	failure |= i2c_master_send(mt_expdr(), buf2, 2) < 2;
-	ccard_unlock_bus();
 
-	if (failure) {
+	if (ccard_lock_bus()) {
+		printk(KERN_ERR "unable to lock i2c bus\n");
+		return 1;
+	} else if (i2c_master_send(mt_expdr(), buf, 2) < 2 || \
+	    i2c_master_send(mt_expdr(), buf2, 2) < 2) {
+		ccard_unlock_bus();
 		printk(KERN_ERR "failed to configure magnetorquer GPIO expander\n");
 		return -1;
 	}
+	ccard_unlock_bus();
 
 	create_mt_devices();
 
@@ -149,15 +153,14 @@ s8 set_mt_state(u8 mt_num, enum mt_state desired_state) {
 		return 0;
 	}
 
-	// i2c operation values
+	s8 outregbuf[] = {0x01};
+	s8 valbuf[1];
+
 	if (ccard_lock_bus()) {
 		printk(KERN_ERR "unable to lock i2c bus\n");
 		return 1;
-	}
-	s8 outregbuf[] = {0x01};
-	s8 valbuf[1];
-	if (i2c_master_send(mt_expdr(), outregbuf, 1) < 0 || \
-	    i2c_master_recv(mt_expdr(), valbuf, 1) < 0) {
+	} else if (i2c_master_send(mt_expdr(), outregbuf, 1) < 1 || \
+	    i2c_master_recv(mt_expdr(), valbuf, 1) < 1) {
 		printk(KERN_ERR "error reading mt state for mt %i\n", mt_num);
 		ccard_unlock_bus();
 		return 1;
@@ -236,7 +239,7 @@ static char *possible_fwd_str[16] = {
 	"positive\n", "up\n", "+\n", "->\n"
 };
 static char *possible_bwd_str[16] = {
-	"backward\n", "back\n", "reverse\n", "bwd\n", "bkwd\n", "rvrs\n",
+	"reverse\n", "back\n", "backward\n", "bwd\n", "bkwd\n", "rvrs\n",
 	"rear\n", "-1\n", "undo\n", "other way\n", "2\n", "negative\n",
 	"-\n", "<-\n", "down\n", "BACK\n"
 };
@@ -255,40 +258,34 @@ static ssize_t read_mt_state(struct device *dev, \
 
 	s8 mt_num = 0;
 	for (int i = 1; i < MT_COUNT; i++) {
-		if (dev == &_mt_devices[i]) {
+		if (dev == _mt_devices[i]) {
 			mt_num = i;
 			break;
 		}
 	}
 
-	enum mt_state cur_state = mt_num;//get_mt_state(mt_num);
+	enum mt_state cur_state = get_mt_state(mt_num);
 
-	char **cur_str_list = possible_off_str;
-	char **other_str_list1 = possible_fwd_str;
-	char **other_str_list2 = possible_bwd_str;
-	char **other_str_list3 = possible_trans_str;
+	char *state_str = possible_off_str[0];
 	switch (cur_state) {
 	case forward:
-		cur_str_list = possible_fwd_str;
-		other_str_list1 = possible_bwd_str;
-		other_str_list2 = possible_trans_str;
-		other_str_list3 = possible_off_str;
+		state_str = possible_fwd_str[0];
 		break;
 	case reverse:
-		cur_str_list = possible_bwd_str;
-		other_str_list2 = possible_trans_str;
-		other_str_list3 = possible_off_str;
+		state_str = possible_bwd_str[0];
 		break;
 	case transitioning:
-		cur_str_list = possible_trans_str;
-		other_str_list2 = possible_off_str;
+		state_str = possible_trans_str[0];
+		break;
 	default:
 		break;
 	}
 
-	return scnprintf(buf, 100, "[%s] %s %s %s\n", cur_str_list[0], \
-		  other_str_list1[0], other_str_list2[0], other_str_list3[0]);
+	// have to remove the trailing return character
+	char str[30];
+	scnprintf(str, strlen(state_str), "%s", state_str);
 
+	return scnprintf(buf, 100, "[%s] off forward reverse brake\n", str);
 }
 
 
@@ -301,7 +298,7 @@ static ssize_t write_mt_state(struct device *dev, \
 
 	s8 mt_num = 0;
 	for (int i = 1; i < MT_COUNT; i++) {
-		if (dev == &_mt_devices[i]) {
+		if (dev == _mt_devices[i]) {
 			mt_num = i;
 			break;
 		}
@@ -322,7 +319,7 @@ static ssize_t write_mt_state(struct device *dev, \
 	}
 
 	printk(KERN_DEBUG "setting mt %i to state %i\n", mt_num, state);
-	//set_mt_state(mt_num, state);
+	set_mt_state(mt_num, state);
 
 	return count;
 }
@@ -336,21 +333,37 @@ static void ccard_release_mt(struct device *dev)
 
 static inline void create_mt_devices()
 {
-	struct device *parent = &dsa_expdr()->dev;
+	printk(KERN_DEBUG "creating magnetorquer sysfs files\n");
+
+	struct device *parent = &mt_expdr()->dev;
+
+	struct class mt_class = {
+		.name = "magnetorquer",
+		.owner = THIS_MODULE,
+		.dev_release = ccard_release_mt,
+	};
+	_mt_class = mt_class;
+
+	if (class_register(&_mt_class)) {
+		printk(KERN_ERR "failed to create magnetorquer class\n");
+		return;
+	}
+
+	if (alloc_chrdev_region(&_dev_mt[0], 0, MT_COUNT, "magnetorquer")) {
+		printk(KERN_ERR "couldn't create magnetorquer dev_t's\n");
+		return;
+	}
+
 	for (int i = 0; i < MT_COUNT; i++) {
 		char name[15];
 		scnprintf(name, 15, "magnetorquer%i", i);
-		struct device mt = {
-			.parent = parent,
-			.init_name = name,
-			.driver = parent->driver,
-			.release = ccard_release_mt,
-		};
-		_mt_devices[i] = mt;
 
+		_dev_mt[i] = MKDEV(MAJOR(_dev_mt[0]), MINOR(_dev_mt[0]) + i);
 
-		if (device_register(&_mt_devices[i]) || \
-		    device_create_file(&_mt_devices[i], &dev_attr_state)) {
+		_mt_devices[i] = device_create(&_mt_class, parent, _dev_mt[i], \
+					       NULL, name);
+
+		if (device_create_file(_mt_devices[i], &dev_attr_state)) {
 			printk(KERN_ERR "error creating sysfs files\n");
 			return;
 		}
@@ -362,9 +375,13 @@ static inline void create_mt_devices()
 static inline void remove_mt_devices()
 {
 	for (int i = 0; i < MT_COUNT; i++) {
-		device_remove_file(&_mt_devices[i], &dev_attr_state);
-		device_unregister(&_mt_devices[i]);
+		device_remove_file(_mt_devices[i], &dev_attr_state);
+		device_destroy(&_mt_class, _dev_mt[i]);
 	}
+
+	unregister_chrdev_region(_dev_mt[0], MT_COUNT);
+
+	class_unregister(&_mt_class);
 }
 
 

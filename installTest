@@ -1,3 +1,4 @@
 #!/bin/bash
 
-sshpass -p "1rv1n3O1" scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ccardcore/ccardmodule.ko gnd-irvine-01:/data/
+sshpass -p "1rv1n3O1" scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ccardcore/ccardmodule.ko ~/.ssh/id_rsa.pub gnd-irvine-01:/data/
+sshpass -p "1rv1n3O1" ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no gnd-irvine-01 "cat /data/id_rsa.pub >> ~/.ssh/authorized_keys"

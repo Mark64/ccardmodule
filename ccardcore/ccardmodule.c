@@ -28,7 +28,7 @@ module_init(start_ccard);
 module_exit(poweroff_ccard);
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Mark Hill <markleehill@gmail.com>");
-MODULE_VERSION("0.1.0");
+MODULE_VERSION("0.2.0");
 MODULE_DESCRIPTION("controls the LED, GPS, thruster, DSAs, and magnetorquers");
 MODULE_SUPPORTED_DEVICE("intrepid-based ccard2");
 
