@@ -2,7 +2,6 @@
 // by Mark Hill
 
 #include<linux/kernel.h>
-#include<linux/semaphore.h>
 #include<linux/i2c.h>
 #include<linux/types.h>
 
@@ -168,19 +167,16 @@ static inline void name_i2c_client(struct i2c_client *client, \
 				   const char name[])
 {
 	scnprintf(client->name, I2C_NAME_SIZE, name);
-	//scnprintf(client->dev.init_name, I2C_NAME_SIZE, name);
 }
 
 static inline void create_dsa_expdr_device()
 {
 	name_i2c_client(_dsa, "dsa_expdr");
-
 }
 
 static inline void create_mt_expdr_device()
 {
 	name_i2c_client(_mt, "mt_expdr");
-
 }
 
 

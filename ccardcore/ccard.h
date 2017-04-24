@@ -1,12 +1,15 @@
-// I decided to go with a unified header file for all calls, which proved
-//   very useful when it came to debugging
-
-// preprocessor macros (along with the endif at the bottom) are used to prevent
-//   including the same file twice in projects with lots of header files
+// c card driver header
+// yes, the spi and uart devices are unimplemented
+// I didn't realize the atmel driver controls them currently
+// however, with the move to usb on IRVINE03, it may be necessary to finish
+//   the implementation
+//
 // by Mark Hill
 
 #include<linux/types.h>
 #include<linux/i2c.h>
+#include<linux/fs.h>
+#include<linux/device.h>
 
 #ifndef _cleanheader
 #define _cleanheader
@@ -26,7 +29,7 @@ enum dsa_state {
 };
 
 
-// so I designed the magnetorquer circuit around this H-Bridge
+// the magnetorquer circuit was designed around this H-Bridge
 //   IC (integrated circuit)(for more information on what an
 //     H-Bridge is, see this wikipedia article: https://en.wikipedia.org/wiki/H_bridge)
 //   http://www.rohm.com/web/global/datasheet/BD6230F/bd623x-e - IC datasheet
@@ -79,6 +82,22 @@ void set_5v0_pwr(u8 state, s8 flags);
 // these are implemented by their respective controllers
 struct i2c_client *dsa_expdr(void);
 struct i2c_client *mt_expdr(void);
+// returns a struct pointer to the thruster spi_device
+struct spi_device *thruster(void);
+// returns a struct pointer to the gps device
+struct device *gps(void);
+// returns a struct pointer to the LED device
+struct device *led(void);
+
+// returns a pointer to the navigation class object, which the magnetorquers, GPS,
+//   and thruster belong to
+// will return NULL if the class doesn't exist or couldn't be created
+struct class *ccard_nav_class(void);
+
+
+//
+// devices
+//
 
 // this function initializes the DSA hardware so that it is ready for release
 //   and/or deploy operations
@@ -93,94 +112,57 @@ s8 init_mt(void);
 // initializes the gps card
 s8 init_gps(void);
 
+// initializes the thruster
+s8 init_thruster(void);
+
+//
+// drivers
+//
+
 // starts the i2c driver
 s8 ccard_init_i2c(void);
+
+// starts the spi driver
+s8 ccard_init_spi(void);
+
 
 
 // cleans up data for the DSAs and turns off power
 void cleanup_dsa(void);
 
-// clenas up data for the magnetoruqers and safely switches them off
+// cleans up data for the magnetoruqers and safely switches them off
 void cleanup_mt(void);
 
-// cleansup gps data and shuts the device off
+// cleans up gps data and shuts the device off
 void cleanup_gps(void);
+
+// cleans up the thruster data
+void cleanup_thruster(void);
 
 // ends the i2c driver
 void ccard_cleanup_i2c(void);
+
+// ends the spi driver
+void ccard_cleanup_spi(void);
 
 // provides a mechanism to restrict i2c bus usage
 int ccard_lock_bus(void);
 void ccard_unlock_bus(void);
 
-// allows runtime configurable timeout duration
-void set_usr_rel_timeout(u8 desired_timeout);
-void set_usr_dep_timeout(u8 desired_timeout);
-
-
-// this function returns an enum value representing the current state of
-//   DSA <dsaNumber>
+// gets the dsa state of dsa 'dsa'
 enum dsa_state get_dsa_state(u8 dsa);
-
-// this function returns an enum value representing the current state of
-//   magnetorquer <mtNumber>
+// gets the magnetorquer state of magnetorquer 'mt'
 enum mt_state get_mt_state(u8 mt);
 
-// gets the current GPS location
-struct ccard_vec3int ccard_get_position(void);
-
-
-// as it implies, this function attempts to set DSA <dsaNumber> to
-//   the state indicated by <desiredState>
-// if that fails because of a hardware issue, i2c access problem,
-//   or because <desiredState> indicated an impossible transition
-//   (such as transitioning from released to stowed, which must be
-//   done manually, or asking to transition to releasing or deploying,
-//   which are intermediates and do not represent a discrete state),
-//   then this function will halt and return -1, indicating
-//   an error
-// however, you'll notice that a transition from stowed to released is
-//   not recognized as an impossible transition
-// so what happens when you indicated a transition from stowed to released?
-// well the function will recognize it as a possible error, and will
-//   log a warning, as well as return 3, indicating a warning condition,
-//   but the operation will still be carried out
-// if an operation is acceptable and no warnings or errors occured, this
-//   will return 0 to indicate a good value for desiredState
-// NOTE: this DOES NOT mean that the DSA state was actually changed, just
-//   that it was valid input and has been passed to a background thread
-//   to execute the actual hardware change
-// Normally, I would add a function pointer as an input to be called when the
-//   operation finishes, but because this is a kernel module, not only
-//   would that be insecure, it would also lead to insanely difficult bugs
-//   to diagnose and crazy reboots, so the recommended way to check the DSA
-//   state is to query the getDSAState(dsaNumber) function periodically
-//
-// desired state should be either <released> or <deployed>
+// sets the dsa state to the desired state
 s8 set_dsa_state(u8 dsa, enum dsa_state desired_state);
-
-// this function sets magnetorquer <mtNumber> to the desired state indicated
-//   by <desiredState>
-// returns 0 if the passed in state was acceptable (which it will always be if
-//   you use a value from the MTState enum} and the system has successfully
-//   transitioned to that state
-// this function, unlike setDSAState, executes hardware changes on a the calling
-//   thread, so it does not requires the user to query getMagnetorquer state,
-//   though this function will take a longer period of time to return,
-//   unlike the DSA function
-// <transitioning> is an acceptable state here as it is useful when debugging
-//   the hardware, though it is unnecessary to do in normal operation as the
-//   implementation already handles switching to that as an intermediate state
-// setting the state to transitioning allows for a store magnetic field to
-//   discharge as it created a closed, short circuit across the 9.1ohm resistor,
-//   the magnetorquer coil, and an isolated branch of the H-bridge IC
+// sets the magnetorquer state to the desired state
 s8 set_mt_state(u8 mt, enum mt_state desired_state);
 
 
+
+
 #endif
-
-
-
 
 
 
