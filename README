@@ -1,0 +1,163 @@
+This loadable kernel module allows for control of the DSAs through a
+user-friendly sysfs interface.  To build the project, simply run
+
+> make
+
+A menuconfig prompt will show up. You can safely exit the config
+immediately, it only is used to fill in the missing config options
+with the defaults so that you don't need to type "y/n/m" for the
+hundreds of new options
+The output file "ccardmodule.ko" will be in the ccardcore folder
+Copy that file to the intrepid board and then run
+
+> insmod /containing/directory/ccardmodule.ko
+
+At this point, the module is installed
+
+
+
+Usermode interface
+
+To access options and perform operations, you can use the sysfs
+capability of the module
+To view the sysfs files, run
+
+> cd /sys/class
+
+If you run this on the Irvine01 C Card, you'll see a folder called
+"dsa"
+If you run this on the Irvine02 C Card, you'll see a folder
+called "magnetorquer" in addition to the "dsa" folder
+Don't be fooled though, attempted to read and write to the Irvine01
+C Card with this module won't work. The pin configuration was changed
+on the new C Card, making it incompatible.
+
+
+
+
+DSAs
+
+
+Setting DSA operation timeouts
+
+The files controlling the dsa operation timeouts are located in
+
+> cd /sys/class/dsa
+
+There, you will see a file called "release_timeout" and another file
+called "deploy_timeout"
+Run 
+
+> cat /sys/class/dsa/release_timeout
+
+It will print out the current release timeout in seconds. If you write
+a positive integer to that file, it will set the timeout for the
+release operation to that value
+
+The deploy_timeout file works exactly the same.
+
+
+Performing DSA operations
+
+Each DSA is a separate device.  To view them, run
+
+> cd /sys/class/dsa/dsa0
+or
+> cd /sys/class/dsa/dsa1
+
+The files of interest are "current_state" and "desired_state"
+The dsa driver works by comparing the current state, as read
+from the GPIO expander, to the desired state entered by the user.
+If there is a mismatch between the two, an operation is performed.
+
+The current_state file is readonly, and should only be used to check
+state.
+The desired_state file is read/write.
+
+To release the DSA, write "release" to the desired_state file with
+
+> echo "release" > desired_state
+
+To deploy the DSA, write "deploy" to the desired_state file with
+
+> echo "deploy" > desired_state
+
+If you would like to cancel and operation, write "off" to the desired_state
+file with
+
+> echo "off" > desired_state
+
+There are actually multiple accepted strings for each operation,
+such as common typos like Off, oFF, oFf, and other synonyms like
+stop or end. For the full list, see ccardcore/dsa.c
+
+
+Reading DSA state
+
+To read the current state or desired state of a DSA, simply
+read the file with 
+
+> cat /sys/class/dsa/dsa0/desired_state
+
+It will print out a string with the format
+[state] otherstate otherstate1 ...
+
+The text inside the [] brackets is the state, while the text
+after it is simply various options that could possibly be
+returned by the read operation.  In the case of the desired
+state, those options are also possilbe strings you can write
+
+
+
+Magnetorquers
+
+
+Reading magnetorquer states
+
+The magnetorquer files are located in
+
+> cd /sys/class/magnetorquer
+
+There are no global timeouts or other configuration files here,
+just device folders for each magnetorquer
+
+To view a magnetorquer, run
+
+> cd /sys/class/magnetorquer/magnetorquer0
+
+Inside, you will find only 1 file of interest, which is called
+"current_state"
+
+This functions different than the corresponding file for the
+DSAs in that it is read/write
+
+It also prints out state after running
+
+> cat current_state
+
+The output is formatted similarly, with the true state in []
+brackets and the possible states printed afterwards. Those
+possible states can also be written with
+
+> echo "<state>" > current_state
+
+Do not try to implement you own i2c controller for the
+magnetorquers until you have read the data sheet for the
+H-bridge IC (see ccardcore/ccard.h) and understand how
+to implement the "brake" functionality, otherwise you
+risk damaging the resistor setting the voltage to the
+magnetorquer due to back-emf
+
+
+
+
+
+
+The module is able to detect when the c card is plugged in and
+when it is unplugged, so that functionality is at least
+hotpluggable.  Email any questions to 
+markleehill@gmail.com
+
+
+
+

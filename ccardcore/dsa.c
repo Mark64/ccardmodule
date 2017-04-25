@@ -21,7 +21,7 @@
 
 #include "ccard.h"
 
-#define ccard_rel_dfl_timeout 50
+#define ccard_rel_dfl_timeout 12
 #define ccard_dep_dfl_timeout 10
 #define DSA_COUNT 2
 
