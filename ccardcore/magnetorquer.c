@@ -59,7 +59,6 @@ s8 init_mt() {
 		return 0;
 
 	create_mt_devices();
-	return 0;
 
 	// configure all pins as outputs
 	s8 cfgreg = 0x03;
@@ -95,7 +94,6 @@ void cleanup_mt() {
 		return;
 
 	remove_mt_devices();
-	return;
 
 	// allows the magnetic field to be discharged before
 	//   shutting the hardware off
@@ -327,7 +325,7 @@ static ssize_t write_mt_state(struct device *dev, \
 
 static void ccard_release_mt(struct device *dev)
 {
-	printk(KERN_DEBUG "releasing dsa device file\n");
+	printk(KERN_DEBUG "releasing magnetorquer device file\n");
 }
 
 

@@ -77,13 +77,23 @@ void set_dsa_pwr(u8 state, s8 flags);
 // the main 5v0 source for all components
 void set_5v0_pwr(u8 state, s8 flags);
 
+
+// sets and gets the current thrust values for thruster <num>
+// returns the current thrust as a percent * 1000, or a negative error
+s32 current_thrust(u8 thuster_num);
+// the thrust value should be the percent multiplied by 1000
+// passing a value of 1000 = 100% thrust, 30 = 3%, 7 = 0.7%
+// returns 0 on success or a nonzero error code
+s8 set_thrust(u8 thruster_num, u16 thrust);
+
+
 // returns a struct pointer containing the i2c infomation for the GPIO
 //   expanders
 // these are implemented by their respective controllers
 struct i2c_client *dsa_expdr(void);
 struct i2c_client *mt_expdr(void);
 // returns a struct pointer to the thruster spi_device
-struct spi_device *thruster(void);
+struct i2c_client *thruster_dac(void);
 // returns a struct pointer to the gps device
 struct device *gps(void);
 // returns a struct pointer to the LED device

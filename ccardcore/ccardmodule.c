@@ -49,12 +49,12 @@ static int __init start_ccard(void)
 	sema_init(&sem3v3power, 0);
 	sema_init(&sem5v0power, 0);
 
-	int pleasegive = gpio_request(ccard_3v3_gpio, "3v3ccard");
-	//if (pleasegive)
-	//	printk(KERN_DEBUG "stop exporting gpio %i\n", ccard_3v3_gpio);
-	pleasegive = gpio_request(ccard_5v0_gpio, "5v0ccard");
-	//if (pleasegive)
-	//	printk(KERN_DEBUG "stop exporting gpio %i\n", ccard_5v0_gpio);
+	int gpio_error = gpio_request(ccard_3v3_gpio, "3v3ccard");
+	if (gpio_error)
+		printk(KERN_DEBUG "stop exporting gpio %i\n", ccard_3v3_gpio);
+	gpio_error = gpio_request(ccard_5v0_gpio, "5v0ccard");
+	if (gpio_error)
+		printk(KERN_DEBUG "stop exporting gpio %i\n", ccard_5v0_gpio);
 
 	set_5v0_pwr(1, 0);
 

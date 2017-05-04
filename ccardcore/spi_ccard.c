@@ -101,7 +101,7 @@ static int ccard_spi_remove(struct spi_device *device)
 
 
 // returns the spi_device struct for the thruster
-struct spi_device *thruster()
+struct spi_device *thruster(void)
 {
 	return _thruster;
 }
