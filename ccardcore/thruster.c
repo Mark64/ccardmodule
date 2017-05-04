@@ -40,7 +40,7 @@ static DEVICE_ATTR(thrust, S_IRUSR | S_IWUSR, read_thruster_percent, \
 // stores a flag indicating if the thruster has been initialized
 // 0 = uninitialized, 1 = initialized
 static s8 _thruster_initialized = 0;
-#define THRUST_RESOLUTION 10000
+#define THRUST_RESOLUTION 100
 // stores the current value written to the DAC since the device
 //   is read only hardware
 // value is equal to (true percent) * THRUST_RESOLUTION
