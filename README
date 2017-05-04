@@ -26,9 +26,9 @@ To view the sysfs files, run
 
 If you run this on the Irvine01 C Card, you'll see a folder called
 "dsa"
-If you run this on the Irvine02 C Card, you'll see a folder
-called "magnetorquer" in addition to the "dsa" folder
-Don't be fooled though, attempted to read and write to the Irvine01
+If you run this on the Irvine02 C Card, you'll see a folders
+called "magnetorquer" and "thruster" in addition to the "dsa" folder
+Don't be fooled though, attempting to read and write to the Irvine01
 C Card with this module won't work. The pin configuration was changed
 on the new C Card, making it incompatible.
 
@@ -128,8 +128,8 @@ To view a magnetorquer, run
 Inside, you will find only 1 file of interest, which is called
 "current_state"
 
-This functions different than the corresponding file for the
-DSAs in that it is read/write
+This operates in a different manner than the corresponding file for the
+DSAs in that it is read/write, not readonly
 
 It also prints out state after running
 
@@ -150,12 +150,61 @@ magnetorquer due to back-emf
 
 
 
+Thruster(s)
+
+In the future, there may be a variable number of thrusters
+on board the CubeSat.  This situation is prepared for and
+can be supported with minimal driver code changes.
+
+However, good userspace code will not assume anything about
+the number of thrusters, and leave that determination to the
+higher level navigation software layer. 
+
+The thruster files are located in
+
+> cd /sys/class/thruster
+
+There are no global attribute files for this class, just
+device folders for each thruster labeled "thruster<n>"
+
+To view the first thruster, run
+
+> cd /sys/class/thruster/thruster0
+
+Inside, you will find only 1 file of interest, which
+is called "thrust"
+
+This file operates similar to the release_timeout and
+deploy_timeout files for the dsa class, except the formatting
+is different. 
+
+To read the current thrust percentage, run
+
+> cat thrust
+
+It prints out the thrust power percent in the format
+ 
+> n%
+
+You can write a percent with greater precision however. 
+The kernel does not support floating values easily, so to write
+a percentage, do so by taking the percent and multiplying by 100, so
+70% becomes 7000.  
+
+To write a thrust value, run
+
+> echo "7000" > thrust
+
+A value of 0 will shutoff the thruster.
 
 
 
-The module is able to detect when the c card is plugged in and
-when it is unplugged, so that functionality is at least
-hotpluggable.  Email any questions to 
+
+
+
+The module is not yet able to detect when the c card is plugged in and
+when it is unplugged, so that functionality, along with any other
+feature requests can be sent to the author.  Email any questions to 
 markleehill@gmail.com
 
 
