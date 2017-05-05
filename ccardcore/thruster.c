@@ -122,11 +122,11 @@ s8 set_thrust(u8 thruster_num, u16 thrust)
 		rawThrust = 0;
 
 	s8 command = 0b0011 << 4;
-	s8 outbuf[] = {command, (rawThrust & 0xff00) >> 8, rawThrust &0xff};
+	s8 outbuf[] = {command + ((rawThrust & 0x0f00) >> 8), rawThrust & 0xfc};
 	if (ccard_lock_bus()) {
 		printk(KERN_ERR "unable to lock i2c bus\n");
 		return 1;
-	} else if (i2c_master_send(thruster_dac(), outbuf, 3) < 3) {
+	} else if (i2c_master_send(thruster_dac(), outbuf, 2) < 2) {
 		printk(KERN_ERR "setting thruster to thrust %i init_failed\n", \
 				thrust);
 		ccard_unlock_bus();
