@@ -189,11 +189,11 @@ It prints out the thrust power percent in the format
 You can write a percent with greater precision however. 
 The kernel does not support floating values easily, so to write
 a percentage, do so by taking the percent and multiplying by 100, so
-70% becomes 7000.  
+70% becomes 70.  
 
 To write a thrust value, run
 
-> echo "7000" > thrust
+> echo "4" > thrust // sets thrust to 4%
 
 A value of 0 will shutoff the thruster.
 
