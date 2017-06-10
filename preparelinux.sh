@@ -46,15 +46,14 @@ if [ ! -e $LINUX_DEST_DIR ]; then
 	# clone the repo from the source into the destination
 	#   specified by the variables above
 	git clone $LINUX_REPO $LINUX_DEST_DIR
+	cd $LINUX_DEST_DIR
+	git pull
+	cp polysat.config .config
+	echo "Exit and save once the menu config shows up"
+	$MAKEARCH menuconfig
+	$MAKEARCH -j 8 modules_prepare
+	cd $CUR_DIR
 fi
-
-cd $LINUX_DEST_DIR
-git pull
-cp polysat.config .config
-$MAKEARCH menuconfig
-$MAKEARCH -j 8 modules_prepare
-cd $CUR_DIR
-
 
 
 

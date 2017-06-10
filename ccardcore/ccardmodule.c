@@ -11,7 +11,6 @@
 #include<linux/semaphore.h>
 #include<linux/device.h>
 #include "ccard.h"
-#include "spi_ccard.c"
 #include "i2c_ccard.c"
 #include "magnetorquer.c"
 #include "dsa.c"
@@ -70,11 +69,6 @@ static int __init start_ccard(void)
 	//	return 1;
 	//}
 
-	//if (ccard_init_spi()) {
-	//	printk(KERN_ERR "failed to initialize the spi driver\n");
-	//	return 1;
-	//}
-
 
 	printk(KERN_NOTICE "c card driver loaded\n");
 
@@ -84,7 +78,6 @@ static int __init start_ccard(void)
 // is only a concern when built as a loadable module (debugging)
 static void __exit poweroff_ccard(void) {
 	ccard_cleanup_i2c();
-	//ccard_cleanup_spi();
 
 	//remove_ccard_nav_class();
 

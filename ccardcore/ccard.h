@@ -119,22 +119,12 @@ s8 init_dsa(void);
 // returns 0 on success and -1 on failure
 s8 init_mt(void);
 
-// initializes the gps card
-s8 init_gps(void);
-
 // initializes the thruster
 s8 init_thruster(void);
 
-//
-// drivers
-//
 
 // starts the i2c driver
 s8 ccard_init_i2c(void);
-
-// starts the spi driver
-s8 ccard_init_spi(void);
-
 
 
 // cleans up data for the DSAs and turns off power
@@ -143,17 +133,11 @@ void cleanup_dsa(void);
 // cleans up data for the magnetoruqers and safely switches them off
 void cleanup_mt(void);
 
-// cleans up gps data and shuts the device off
-void cleanup_gps(void);
-
 // cleans up the thruster data
 void cleanup_thruster(void);
 
 // ends the i2c driver
 void ccard_cleanup_i2c(void);
-
-// ends the spi driver
-void ccard_cleanup_spi(void);
 
 // provides a mechanism to restrict i2c bus usage
 int ccard_lock_bus(void);

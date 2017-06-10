@@ -1,4 +1,5 @@
 // implementation for the thruster code
+// based on the part 
 //
 // by Mark Hill
 
@@ -40,7 +41,18 @@ static DEVICE_ATTR(thrust, S_IRUSR | S_IWUSR, read_thruster_percent, \
 // stores a flag indicating if the thruster has been initialized
 // 0 = uninitialized, 1 = initialized
 static s8 _thruster_initialized = 0;
-#define THRUST_RESOLUTION 100
+
+// determines the number of discrete values the thrust percentage can take on
+#define THRUST_RESOLUTION 100 // 100 counts
+// declares the maximum DAC output voltage * 10
+#define DAC_MAX_VOLTAGE 33 // 3.3V
+// declares the number of discrete values the DAC can output
+#define DAC_RESOLUTION 2048 // 2^10
+// declares the maximum thruster control voltage * 10
+#define THRUST_MAX_CONTROL_VOLTAGE 27 // 2.7V
+// declares the minimum thruster control voltage * 10
+#define THRUST_MIN_CONTROL_VOLTAGE 7 // 0.7V
+
 // stores the current value written to the DAC since the device
 //   is read only hardware
 // value is equal to (true percent) * THRUST_RESOLUTION
@@ -87,7 +99,10 @@ void cleanup_thruster()
 }
 
 
-
+// yes, this is a sucky implementation
+// no, you can not replace it with an i2c read
+// why? because the DAC has readonly registers
+// why is it being used then? cost and package size/pin pitch
 s32 current_thrust(u8 thruster_num)
 {
 	if (thruster_num >= THRUSTER_COUNT) {
@@ -110,8 +125,9 @@ s8 set_thrust(u8 thruster_num, u16 thrust)
 		return 1;
 	}
 
-	u16 max = 65536 - 1;
-	u16 min = 65536 * (7 / 27);
+	
+	u16 max = (DAC_RESOLUTION - 1) * (THRUST_MAX_CONTROL_VOLTAGE / DAC_MAX_VOLTAGE);
+	u16 min = DAC_RESOLUTION * (THRUST_MIN_CONTROL_VOLTAGE / DAC_MAX_VOLTAGE);
 	u16 rawThrust = (max - min) * thrust / THRUST_RESOLUTION + min;
 	if (rawThrust > max || rawThrust < min) {
 		printk(KERN_ERR "math error when calculating thruster thrust %i\

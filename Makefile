@@ -23,7 +23,6 @@ all: toolchain
 	@ $(MAKE) module
 
 toolchain:
-	# installing the intrepid toolchain as defined by$(TOOLCHAIN_GENERATOR_SCRIPT)
 	@ (sh $(ENV_PREPARE_SCRIPT))
 
 module: 
