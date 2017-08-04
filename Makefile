@@ -1,6 +1,6 @@
 # the Makefile wrapper so that I can do out of source builds without having to cd first
 # based on Maurice Ling's Makefile in irvine-01-sw and this site
-#   http://stackoverflow.com/questions/11143062/getting-cmake-to-build-out-of-source-without-wrapping-scripts
+#  http://stackoverflow.com/questions/11143062/getting-cmake-to-build-out-of-source-without-wrapping-scripts
 
 SHELL := /bin/bash
 RM    := rm -rf
